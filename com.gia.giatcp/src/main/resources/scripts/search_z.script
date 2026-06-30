@@ -1,0 +1,79 @@
+
+#######################################
+# Move thread
+gia__movelPos = p[0,0,0,0,0,0]
+gia__movelAcc = 0
+gia__movelVel = 0
+gia__movelStatus = 0
+thread gia__movelThread():
+  enter_critical
+  gia__movelStatus = 1
+  movel(gia__movelPos, a=gia__movelAcc, v=gia__movelVel)
+  gia__movelStatus = 2
+  exit_critical
+end
+
+#######################################
+# Search Z
+def gia__searchZ(intersect, in1, in2, zSearch, zImmerse, acc, vel, debugLvl):
+  gia__movelPos = pose_trans(intersect, p[0,0,-(zSearch/1000),0,0,0])
+  gia__movelAcc = acc
+  gia__movelVel = vel
+  gia__movelStatus = 0
+  local movel_handler = run gia__movelThread()
+  # wait for both inputs to be low
+  while True:
+    if ((not gia__getInput(in1)) and (not gia__getInput(in2))):
+      sleep(0.04)
+      kill movel_handler
+      stopl(2.0)
+      break
+    elif (gia__movelStatus > 1):
+      gia__logMsg("search Z limit reached", debugLvl)
+      return "-1"
+    end
+    sync()
+  end
+  gia__movelPos = pose_trans(intersect, p[0,0,(zImmerse/1000),0,0,0])
+  gia__movelAcc = acc * .2
+  gia__movelVel = vel * .2
+  gia__movelStatus = 0
+  movel_handler = run gia__movelThread()
+  # wait for both inputs to be high
+  while True:
+    if (gia__getInput(in1) and gia__getInput(in2)):
+      sleep(0.04)
+      local p_z = get_actual_tcp_pose()
+      kill movel_handler
+      stopl(2.0)
+      return p_z
+    elif (gia__movelStatus > 1):
+      gia__logMsg("immerse Z limit reached", debugLvl)
+      return "-1"
+    end
+    sync()
+  end
+end
+
+#######################################
+# Immerse Z
+def gia__immerseZ(intersect, in1, in2, zImmerse, acc, vel, debugLvl):
+  gia__movelPos = pose_trans(intersect, p[0,0,(zImmerse/1000),0,0,0])
+  gia__movelAcc = acc * .2
+  gia__movelVel = vel * .2
+  gia__movelStatus = 0
+  local movel_handler = run gia__movelThread()
+  # wait for both inputs to be high
+  while True:
+    if (gia__getInput(in1) and gia__getInput(in2)):
+      sleep(0.04)
+      kill movel_handler
+      stopl(2.0)
+      return 0
+    elif (gia__movelStatus > 1):
+      gia__logMsg("immerse Z limit reached", debugLvl)
+      return -1
+    end
+    sync()
+  end
+end

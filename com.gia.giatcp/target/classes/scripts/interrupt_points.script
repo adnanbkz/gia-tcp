@@ -1,0 +1,87 @@
+
+#######################################
+# Interrupt thread
+gia__plistIn1 = [{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}}]
+gia__plistIn2 = [{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}}]
+gia__countIn1 = 0
+gia__countIn2 = 0
+gia__in1 = 0
+gia__in2 = 0
+thread gia__interruptThread():
+  local flag_in1 = False
+  local flag_in2 = False
+  # Wait until both inputs are low
+  while (gia__getInput(gia__in1) or gia__getInput(gia__in2)):
+    sync()
+  end
+  # Detect loop
+  while True:
+    enter_critical
+    # High/ low trigger input 1
+    flag_in1 = gia__trigHigh(gia__in1, flag_in1, 1)
+    flag_in1 = gia__trigLow(gia__in1, flag_in1, 1)
+    # High/ low trigger input 2
+    flag_in2 = gia__trigHigh(gia__in2, flag_in2, 2)
+    flag_in2 = gia__trigLow(gia__in2, flag_in2, 2)
+    exit_critical
+    sync()
+  end
+end
+
+#######################################
+# Helper functions
+def gia__trigHigh(in, flag, no):
+  if (gia__getInput(in) and (not flag)):
+    gia__incDetectionPoint(no)
+    return True
+  end
+  return flag
+end
+
+def gia__trigLow(in, flag, no):
+  if ((not gia__getInput(in)) and flag):
+    gia__incDetectionPoint(no)
+    return False
+  end
+  return flag
+end
+
+def gia__incDetectionPoint(no):
+  if (no == 1):
+    if (gia__countIn1 < 8):
+      gia__plistIn1[gia__countIn1] = get_actual_tcp_pose()
+      gia__countIn1 = gia__countIn1 + 1
+    end
+  else:
+    if (gia__countIn2 < 8):
+      gia__plistIn2[gia__countIn2] = get_actual_tcp_pose()
+      gia__countIn2 = gia__countIn2 + 1
+    end
+  end
+end
+
+#######################################
+# Detect interrupt points
+def gia__interruptPoints(pStart, in1, in2, radius, acc, vel, overrun, debugLvl):
+  gia__in1 = in1
+  gia__in2 = in2
+  gia__countIn1 = 0
+  gia__countIn2 = 0
+  # calculate circle points and move to start
+  local points = gia__calcCirclePointsTCP(pStart, radius, overrun)
+  local blend = (radius/1000) * .5
+  movel(points[0], a=acc, v=vel)
+  # move circle
+  local interrupt_handler = run gia__interruptThread()
+  movep(points[0], a=acc, v=vel, r=blend)
+  movec(points[1], points[2], a=acc, v=vel, r=blend)
+  movec(points[3], points[0], a=acc, v=vel, r=.001)
+  movep(points[4], a=acc, v=vel)
+  kill interrupt_handler
+  movel(pStart, a=acc, v=vel)
+  gia__logMsg("interrupt count 1=" + to_str(gia__countIn1) + ", interrupt count 2=" + to_str(gia__countIn2), debugLvl)
+  if ((gia__countIn1 >= 4) and (gia__countIn2 >= 4) and ((gia__countIn1 % 2) == 0) and ((gia__countIn2 % 2) == 0)):
+    return [gia__plistIn1[0],gia__plistIn1[1],gia__plistIn1[2],gia__plistIn1[3],gia__plistIn2[0],gia__plistIn2[1],gia__plistIn2[2],gia__plistIn2[3]]
+  end
+  return [p[0,0,0,0,0,0]]
+end

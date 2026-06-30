@@ -1,0 +1,243 @@
+
+#######################################
+# Settings
+gia__errInterrupt = {{err_interrupt}}
+gia__debugLvl = {{debug_lvl}}
+
+#######################################
+# Variables
+gia__actionStatus = [0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0]
+gia__diam = [0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0]
+gia__correction = [{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},
+{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},
+{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}}]
+gia__tcp = [{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},
+{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},
+{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}},{{p0}}]
+
+#######################################
+# Public functions
+def gia_tcp_calibXYZ(id, tcp, pRef, pStart, in1, in2, radius, acc, vel, overrun, zSearch, zImmerse, diamOffset, tolMin, tolMax):
+  id = gia__checkId(id)
+
+  local findResp = gia__findIntersect(pStart, in1, in2, radius, acc, vel, overrun, gia__debugLvl)
+  if (size(findResp) == 3):
+    local findErr = findResp[2]
+    if (findErr[0] == -1):
+      gia__logMsg("calib XYZ, wrong number of interrupt points", gia__debugLvl)
+      gia__actionStatus[id] = -1
+      return None
+    elif (findErr[0] == -2):
+      gia__logMsg("calib XYZ, unable to calculate intersect point", gia__debugLvl)
+      gia__actionStatus[id] = -2
+      return None
+    else:
+      gia__logMsg("calib XYZ, invalid intersect point", gia__debugLvl)
+      gia__actionStatus[id] = -3
+      return None
+    end
+  end
+
+  local pIntersect = findResp[0]
+  local pDiam = findResp[1]
+  movel(pIntersect, a=acc, v=vel)
+
+  if (not gia__getInput(in1)) or (not gia__getInput(in2)):
+    gia__logMsg("input low on intersect position", gia__debugLvl)
+    gia__actionStatus[id] = -4
+    return None
+  end
+
+  local pSearchZ = gia__searchZ(pIntersect, in1, in2, zSearch, zImmerse, acc, vel, gia__debugLvl)
+  if (to_str(pSearchZ) == "-1"):
+    gia__logMsg("search motion Z failed, inputs not low", gia__debugLvl)
+    gia__actionStatus[id] = -5
+    return None
+  end
+
+  gia__diam[id] = pDiam[0] + (diamOffset/1000)
+  gia__correction[id] = pose_inv(pose_trans(pose_inv(pRef), pSearchZ))
+  gia__tcp[id] = pose_trans(tcp, gia__correction[id])
+
+  if (not gia__checkTol(gia__correction[id], 0, tolMin, tolMax)) or (not gia__checkTol(gia__correction[id], 1, tolMin, tolMax)) or (not gia__checkTol(gia__correction[id], 2, tolMin, tolMax)):
+    gia__logMsg("tcp correction outside tolerance", gia__debugLvl)
+    gia__actionStatus[id] = -6
+    return None
+  end
+
+  if (not gia__checkTolVal(gia__diam[id], tolMin[3], tolMax[3])):
+    gia__logMsg("tcp diameter outside tolerance", gia__debugLvl)
+    gia__actionStatus[id] = -7
+    return None
+  end
+
+  gia__actionStatus[id] = 0
+end
+
+def gia_tcp_calibAngleXY(id, pRef, in1, in2, radius, acc, vel, overrun, iter, accuracy, zOffset, maxAngle):
+  id = gia__checkId(id)
+
+  local c = gia__correction[id]
+  local aa = gia__adjustAngleXY(gia__tcp[id], pRef, c[3], c[4], in1, in2, radius, acc, vel, overrun, iter, accuracy, zOffset, maxAngle, gia__debugLvl)
+  if (to_str(aa) == "-11"):
+    gia__actionStatus[id] = -11
+    return None
+  elif (to_str(aa) == "-12"):
+    gia__actionStatus[id] = -12
+    return None
+  elif (to_str(aa) == "-13"):
+    gia__actionStatus[id] = -13
+    return None
+  end
+
+  local cAngles = aa[0]
+
+  if (size(aa) != 2):
+    gia__logMsg("adjust angle outside tolerance RX=" + to_str(r2d(cAngles[3])) + ", RY=" + to_str(r2d(cAngles[4])), gia__debugLvl)
+    gia__actionStatus[id] = -14
+    return None
+  end
+
+  # Update correction
+  c[3] = cAngles[3]
+  c[4] = cAngles[4]
+
+  gia__correction[id] = c
+  gia__tcp[id] = aa[1]
+  gia__actionStatus[id] = 0
+end
+
+def gia_tcp_checkCalib(id, in1, in2):
+  id = gia__checkId(id)
+
+  if (not gia__getInput(in1)) or (not gia__getInput(in2)):
+    gia__logMsg("input low on reference position", gia__debugLvl)
+    gia__actionStatus[id] = -21
+    return None
+  end
+  gia__actionStatus[id] = 0
+end
+
+def gia_tcp_immerseZ(id, pIntersect, in1, in2, acc, vel, zImmerse):
+  id = gia__checkId(id)
+
+  local status = gia__immerseZ(pIntersect, in1, in2, zImmerse, acc, vel, gia__debugLvl)
+  if (status < 0):
+    gia__logMsg("immerse motion Z failed, inputs not high", gia__debugLvl)
+    gia__actionStatus[id] = -31
+    return None
+  end
+  gia__actionStatus[id] = 0
+end
+
+def gia_tcp_initCalib(id, opt_status=-99):
+  id = gia__checkId(id)
+  gia__actionStatus[id] = opt_status
+end
+
+def gia_tcp_isActionOk(id):
+  id = gia__checkId(id)
+  return (gia__actionStatus[id] == 0)
+end
+
+def gia_tcp_getStatus(id):
+  id = gia__checkId(id)
+  return gia__actionStatus[id]
+end
+
+def gia_tcp_getStatusMsg(id):
+  id = gia__checkId(id)
+  if (gia__actionStatus[id] == 0):
+    return "{{err_code_success}}"
+  elif (gia__actionStatus[id] == -1):
+    return "{{err_code_1}}"
+  elif (gia__actionStatus[id] == -2):
+    return "{{err_code_2}}"
+  elif (gia__actionStatus[id] == -3):
+    return "{{err_code_3}}"
+  elif (gia__actionStatus[id] == -4):
+    return "{{err_code_4}}"
+  elif (gia__actionStatus[id] == -5):
+    return "{{err_code_5}}"
+  elif (gia__actionStatus[id] == -6):
+    return "{{err_code_6}}"
+  elif (gia__actionStatus[id] == -7):
+    return "{{err_code_7}}"
+  elif (gia__actionStatus[id] == -11):
+    return "{{err_code_11}}"
+  elif (gia__actionStatus[id] == -12):
+    return "{{err_code_12}}"
+  elif (gia__actionStatus[id] == -13):
+    return "{{err_code_13}}"
+  elif (gia__actionStatus[id] == -14):
+    return "{{err_code_14}}"
+  elif (gia__actionStatus[id] == -21):
+    return "{{err_code_21}}"
+  elif (gia__actionStatus[id] == -31):
+    return "{{err_code_31}}"
+  end
+  return "{{err_code_unknown}}"
+end
+
+def gia_tcp_getCorrectionMM(id):
+  id = gia__checkId(id)
+  local c = gia__correction[id]
+  return [c[0]*1000, c[1]*1000, c[2]*1000]
+end
+
+def gia_tcp_getDiameterMM(id):
+  id = gia__checkId(id)
+  return gia__diam[id]*1000
+end
+
+def gia_tcp_getCalibTCP(id):
+  id = gia__checkId(id)
+  return gia__tcp[id]
+end
+
+def gia_tcp_getCalibCorrection(id):
+  id = gia__checkId(id)
+  return gia__correction[id]
+end
+
+def gia_tcp_activateTCP(id):
+  id = gia__checkId(id)
+  set_tcp(gia__tcp[id])
+end
+
+def gia_tcp_setTCP(tcp):
+  set_tcp(tcp)
+end
+
+#######################################
+# Set a stored calibration (used by the installation preamble for calibrated TCPs)
+def gia_tcp_setStored(id, correction, tcpPose, diamMM):
+  id = gia__checkId(id)
+  gia__correction[id] = correction
+  gia__tcp[id] = tcpPose
+  gia__diam[id] = diamMM/1000
+  gia__actionStatus[id] = 0
+end
+
+#######################################
+# Private functions
+def gia__checkId(id):
+  if (id < 1) or (id > 30):
+    gia__logMsg("invalid id: " + to_str(id), gia__debugLvl, True)
+    gia__popup("Invalid id: " + to_str(id), gia__errInterrupt)
+    halt
+  end
+  return (id - 1)
+end
+
+def gia__checkTol(p, idx, min, max):
+  return (p[idx] >= min[idx]) and (p[idx] <= max[idx])
+end
+
+def gia__checkTolVal(val, min, max):
+  return (val >= min) and (val <= max)
+end

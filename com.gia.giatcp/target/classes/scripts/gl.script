@@ -1,0 +1,155 @@
+
+#######################################
+# GIA TCP global functions
+def gia__getInput(n):
+  if (n >= 10):
+    # Configurable digital input
+    return get_configurable_digital_in(n % 10)
+  else:
+    return get_standard_digital_in(n)
+  end
+end
+
+def gia__calcCirclePointsTCP(pos, radius, opt_overrun=15):
+  local r = radius/1000
+  local overrunX = cos(d2r(opt_overrun)) * r
+  local overrunY = sin(d2r(opt_overrun)) * r
+  local p_x1 = pose_trans(pos, p[r,0,0,0,0,0])
+  local p_y1 = pose_trans(pos, p[0,r,0,0,0,0])
+  local p_x2 = pose_trans(pos, p[-r,0,0,0,0,0])
+  local p_y2 = pose_trans(pos, p[0,-r,0,0,0,0])
+  local p_xy = pose_trans(pos, p[overrunX,overrunY,0,0,0,0])
+  return [p_x1, p_y1, p_x2, p_y2, p_xy]
+end
+
+def gia__calcAngleXY(pRef, pIntersect, debugLvl=0):
+  local p = gia__pBase2Frame(pIntersect, pRef)
+  local ax = atan2(p[0],p[2])
+  local ay = atan2(p[1],p[2])
+  ax = gia__correctAngle(ax)
+  ay = gia__correctAngle(ay)
+  gia__logMsg("calcAngleXY, p=" + to_str(p) + ", ax=" + to_str(r2d(ax)) + ", ay=" + to_str(r2d(ay)), debugLvl)
+  return [-ay, ax] # Attention, ay (RX) must be negated
+end
+
+def gia__correctAngle(a):
+  local r90=d2r(90)
+  local r180=d2r(180)
+  if (a>r90):
+    return a-r180
+  elif (a<(-r90)):
+    return a+r180
+  end
+  return a
+end
+
+def gia__updateTCPAngles(tcp, rx, ry):
+  return pose_trans(tcp,p[0,0,0,rx,ry,0])
+end
+
+def gia__pCenter(p1, p2):
+  local p_sub = pose_sub(p2, p1)
+  local l_offset = [p_sub[0], p_sub[1], p_sub[2]] * .5
+  local p_offset = p[l_offset[0], l_offset[1], l_offset[2], 0, 0, 0]
+  return pose_add(p1, p_offset)
+end
+
+def gia__meanDiameter(list):
+  local i = 0
+  local diam = 0
+  local count = 0
+  while (i < (size(list)-1)):
+    diam = diam + point_dist(list[i], list[i+1])
+    i = i + 2
+    count = count + 1
+  end
+  if (count > 0):
+    diam = (diam / count)
+  end
+  return diam
+end
+
+def gia__logMsg(message, debugLvl=0, important=False):
+  if (debugLvl == 2) or important:
+    textmsg("GIA TCP, " + message)
+  end
+end
+
+def gia__popup(message, interrupt=False, warn=False, err=True):
+  if interrupt:
+    popup(message, title="GIA TCP", warning=warn, error=err, blocking=True)
+  end
+  return (not interrupt)
+end
+
+def gia__csvToNumArray(s):
+  local list = [0,0,0,0,0,0,0,0,0,0,0]
+  local i = 0
+  local idx = 0
+  local start = 0
+  local len = str_len(s)
+  while (i < (size(list)-1)):
+    idx = str_find(s, ",", start)
+    if (idx > 0):
+      list[i+1] = to_num(str_sub(s, start, idx-start))
+      i = i + 1
+      start = idx + 1
+    else:
+      if (start < len):
+        list[i+1] = to_num(str_sub(s, start, len-start))
+        i = i + 1
+        break
+      else:
+        break
+      end
+    end
+  end
+  # list[0] = number of values
+  list[0] = i
+  return list
+end
+
+def gia__pBase2Frame(p, frame):
+  return pose_trans(pose_inv(frame), p)
+end
+
+def gia__pFrame2Base(p, frame):
+  return pose_trans(frame, p)
+end
+
+#######################################
+# 2D line intersection (computed in-script; no external RPC server needed).
+# Intersection of line(pA,pB) with line(pC,pD), using the XY components of each
+# pose (already expressed in the start frame). Returns "x,y" (metres) so that
+# gia__csvToNumArray reports a value count of 2, or "0" when the lines are parallel.
+def gia__calc2DIntersect(pA, pB, pC, pD):
+  local ax1 = pA[0]
+  local ay1 = pA[1]
+  local dax = pB[0] - pA[0]
+  local day = pB[1] - pA[1]
+  local bx1 = pC[0]
+  local by1 = pC[1]
+  local dbx = pD[0] - pC[0]
+  local dby = pD[1] - pC[1]
+  local denom = (dax * dby) - (day * dbx)
+  if (norm(denom) < 0.000000001):
+    return "0"
+  end
+  local t = (((bx1 - ax1) * dby) - ((by1 - ay1) * dbx)) / denom
+  local ix = ax1 + (t * dax)
+  local iy = ay1 + (t * day)
+  return to_str(ix) + "," + to_str(iy)
+end
+
+#######################################
+# Live result reporting back to the URCap during installation calibration.
+# Guarded by the {{report}} flag so program-node executions stay silent.
+def gia__reportResult(csv):
+  if ({{report}}):
+    socket_open("{{report_ip}}", {{report_port}}, "gia_rep")
+    socket_send_string(csv, "gia_rep")
+    socket_send_byte(13, "gia_rep")
+    socket_send_byte(10, "gia_rep")
+    socket_close("gia_rep")
+  end
+end

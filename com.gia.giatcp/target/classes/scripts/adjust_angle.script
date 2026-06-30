@@ -1,0 +1,78 @@
+
+def gia__adjustAngleXY(calibTCP, pRef, rx, ry, in1, in2, radius, acc, vel, overrun, iter, accuracy, zOffset, maxAngle, debugLvl):
+  local i = 0
+  local tcp = calibTCP
+  while (i < iter):
+    set_tcp(tcp)
+    local pStart = pose_trans(pRef, p[0,0,(zOffset/1000),0,0,0])
+    movel(pStart, a=acc, v=vel)
+    local findResp = gia__findIntersect(pStart, in1, in2, radius, acc, vel, overrun, debugLvl)
+    if (size(findResp) == 3):
+      local findErr = findResp[2]
+      if (findErr[0] == -1):
+        gia__logMsg("adjust angle, wrong number of interrupt points", debugLvl)
+        return "-11"
+      elif (findErr[0] == -2):
+        gia__logMsg("adjust angle, unable to calculate intersect point", debugLvl)
+        return "-12"
+      else:
+        gia__logMsg("adjust angle, invalid intersect point", debugLvl)
+        return "-13"
+      end
+    end
+
+    local pIntersect = findResp[0]
+    movel(pIntersect, a=acc, v=vel)
+
+    local angleXY = gia__calcAngleXY(pRef, pIntersect, debugLvl)
+    if ((norm(angleXY[0]) > d2r(maxAngle[0])) or (norm(angleXY[1]) > d2r(maxAngle[1]))):
+      return [p[0,0,0,angleXY[0],angleXY[1],0]]
+    end
+
+    rx = rx + angleXY[0]
+    ry = ry + angleXY[1]
+    tcp = gia__updateTCPAngles(calibTCP, rx, ry)
+    gia__logMsg("adjust angle, RX=" + to_str(r2d(rx)) + ", RY=" + to_str(r2d(ry)), debugLvl)
+
+    if ((norm(angleXY[0]) <= d2r(accuracy)) and (norm(angleXY[1]) <= d2r(accuracy))):
+      break
+    end
+
+    i = i + 1
+  end
+
+  set_tcp(tcp)
+  movel(pRef, a=acc, v=vel)
+
+  return [p[0,0,0,rx,ry,0], tcp]
+end
+
+def gia__findIntersect(pStart, in1, in2, radius, acc, vel, overrun, debugLvl):
+  local intrPoints = gia__interruptPoints(pStart, in1, in2, radius, acc, vel, overrun, debugLvl)
+  if (size(intrPoints) != 8):
+    return [p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[-1,0,0,0,0,0]]
+  end
+
+  local diam = gia__meanDiameter(intrPoints)
+  local pA = gia__pCenter(intrPoints[0], intrPoints[1])
+  local pB = gia__pCenter(intrPoints[2], intrPoints[3])
+  local pC = gia__pCenter(intrPoints[4], intrPoints[5])
+  local pD = gia__pCenter(intrPoints[6], intrPoints[7])
+  pA = gia__pBase2Frame(pA, pStart)
+  pB = gia__pBase2Frame(pB, pStart)
+  pC = gia__pBase2Frame(pC, pStart)
+  pD = gia__pBase2Frame(pD, pStart)
+  local intersectStr = gia__calc2DIntersect(pA, pB, pC, pD)
+  local intersectXY = gia__csvToNumArray(intersectStr)
+  if (intersectXY[0] != 2):
+    return [p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[-2,0,0,0,0,0]]
+  end
+
+  local pBase = gia__pFrame2Base(p[intersectXY[1],intersectXY[2],0,0,0,0], pStart)
+  local pIntersect = p[pBase[0], pBase[1], pBase[2], pStart[3], pStart[4], pStart[5]]
+  if (pose_dist(pStart, pIntersect) > (radius/1000)):
+    return [p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[-3,0,0,0,0,0]]
+  end
+
+  return [pIntersect,p[diam,0,0,0,0,0]]
+end

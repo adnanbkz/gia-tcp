@@ -1,0 +1,239 @@
+# GIA TCP Calibration - minimal realtime probe.
+# The ONLY things done on the robot: moveC circles + reading the sensor inputs +
+# capturing get_actual_tcp_pose() at each edge + the Z search. NO maths here:
+# the raw poses are streamed back to Java, which does all the geometry
+# (so the same maths is reusable for other robots, e.g. Estun).
+
+def tcpc__getInput(n):
+  if (n >= 10):
+    return get_configurable_digital_in(n % 10)
+  else:
+    return get_standard_digital_in(n)
+  end
+end
+
+tcpc__plist1 = [p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0]]
+tcpc__plist2 = [p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0],p[0,0,0,0,0,0]]
+tcpc__count1 = 0
+tcpc__count2 = 0
+tcpc__in1 = 0
+tcpc__in2 = 0
+
+def tcpc__rec(no):
+  if (no == 1):
+    if (tcpc__count1 < 8):
+      tcpc__plist1[tcpc__count1] = get_actual_tcp_pose()
+      tcpc__count1 = tcpc__count1 + 1
+    end
+  else:
+    if (tcpc__count2 < 8):
+      tcpc__plist2[tcpc__count2] = get_actual_tcp_pose()
+      tcpc__count2 = tcpc__count2 + 1
+    end
+  end
+end
+
+def tcpc__trigHigh(in, flag, no):
+  if (tcpc__getInput(in) and (not flag)):
+    tcpc__rec(no)
+    return True
+  end
+  return flag
+end
+
+def tcpc__trigLow(in, flag, no):
+  if ((not tcpc__getInput(in)) and flag):
+    tcpc__rec(no)
+    return False
+  end
+  return flag
+end
+
+thread tcpc__edgeThread():
+  local f1 = False
+  local f2 = False
+  # wait until both inputs are low (tool clear of the beams)
+  while (tcpc__getInput(tcpc__in1) or tcpc__getInput(tcpc__in2)):
+    sync()
+  end
+  while True:
+    enter_critical
+    f1 = tcpc__trigHigh(tcpc__in1, f1, 1)
+    f1 = tcpc__trigLow(tcpc__in1, f1, 1)
+    f2 = tcpc__trigHigh(tcpc__in2, f2, 2)
+    f2 = tcpc__trigLow(tcpc__in2, f2, 2)
+    exit_critical
+    sync()
+  end
+end
+
+def tcpc__circlePoints(pos, radius, overrun):
+  local r = radius/1000
+  local ox = cos(d2r(overrun)) * r
+  local oy = sin(d2r(overrun)) * r
+  return [pose_trans(pos, p[r,0,0,0,0,0]), pose_trans(pos, p[0,r,0,0,0,0]), pose_trans(pos, p[-r,0,0,0,0,0]), pose_trans(pos, p[0,-r,0,0,0,0]), pose_trans(pos, p[ox,oy,0,0,0,0])]
+end
+
+def tcpc__poseStr(pz):
+  return to_str(pz[0]) + "," + to_str(pz[1]) + "," + to_str(pz[2]) + "," + to_str(pz[3]) + "," + to_str(pz[4]) + "," + to_str(pz[5])
+end
+
+def tcpc__send(host, port, msg):
+  socket_open(host, port, "tcpc")
+  socket_send_string(msg, "tcpc")
+  socket_send_byte(10, "tcpc")
+  socket_close("tcpc")
+end
+
+# Move to pStart, run one probe circle capturing edges, and build the reply:
+#   "C;count1;count2;<l1_0>;<l1_1>;<l1_2>;<l1_3>;<l2_0>;<l2_1>;<l2_2>;<l2_3>"
+# where each <pose> is "x,y,z,rx,ry,rz". Java validates the counts and does the maths.
+# Returns the message string (the caller decides over which socket to send it).
+def tcpc__circleMsg(pStart, in1, in2, radius, acc, vel, overrun):
+  tcpc__in1 = in1
+  tcpc__in2 = in2
+  tcpc__count1 = 0
+  tcpc__count2 = 0
+  local pts = tcpc__circlePoints(pStart, radius, overrun)
+  local blend = (radius/1000) * .5
+  movel(pts[0], a=acc, v=vel)
+  local h = run tcpc__edgeThread()
+  movep(pts[0], a=acc, v=vel, r=blend)
+  movec(pts[1], pts[2], a=acc, v=vel, r=blend)
+  movec(pts[3], pts[0], a=acc, v=vel, r=.001)
+  movep(pts[4], a=acc, v=vel)
+  kill h
+  movel(pStart, a=acc, v=vel)
+  local msg = "C;" + to_str(tcpc__count1) + ";" + to_str(tcpc__count2)
+  local i = 0
+  while (i < 4):
+    msg = msg + ";" + tcpc__poseStr(tcpc__plist1[i])
+    i = i + 1
+  end
+  i = 0
+  while (i < 4):
+    msg = msg + ";" + tcpc__poseStr(tcpc__plist2[i])
+    i = i + 1
+  end
+  return msg
+end
+
+# Live path: probe one circle and send the reply over a fresh socket (one secondary program).
+def tcpc__runCircle(pStart, in1, in2, radius, acc, vel, overrun, host, port):
+  tcpc__send(host, port, tcpc__circleMsg(pStart, in1, in2, radius, acc, vel, overrun))
+end
+
+# Move thread for the Z search (so we can poll the inputs while moving).
+tcpc__mPos = p[0,0,0,0,0,0]
+tcpc__mAcc = 0
+tcpc__mVel = 0
+tcpc__mStatus = 0
+thread tcpc__moveThread():
+  enter_critical
+  tcpc__mStatus = 1
+  movel(tcpc__mPos, a=tcpc__mAcc, v=tcpc__mVel)
+  tcpc__mStatus = 2
+  exit_critical
+end
+
+# Move to pCenter, search down until both inputs low, then immerse up until both
+# high, and build "Z;<pose>" (pose at the beam plane) or "Z;FAIL". Returns the string.
+def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
+  movel(pCenter, a=acc, v=vel)
+  tcpc__mPos = pose_trans(pCenter, p[0,0,-(zSearch/1000),0,0,0])
+  tcpc__mAcc = acc
+  tcpc__mVel = vel
+  tcpc__mStatus = 0
+  local h = run tcpc__moveThread()
+  local found = False
+  while True:
+    if ((not tcpc__getInput(in1)) and (not tcpc__getInput(in2))):
+      sleep(0.04)
+      kill h
+      stopl(2.0)
+      found = True
+      break
+    elif (tcpc__mStatus > 1):
+      kill h
+      break
+    end
+    sync()
+  end
+  if (not found):
+    return "Z;FAIL"
+  end
+  tcpc__mPos = pose_trans(pCenter, p[0,0,(zImmerse/1000),0,0,0])
+  tcpc__mAcc = acc * .2
+  tcpc__mVel = vel * .2
+  tcpc__mStatus = 0
+  h = run tcpc__moveThread()
+  while True:
+    if (tcpc__getInput(in1) and tcpc__getInput(in2)):
+      sleep(0.04)
+      local pz = get_actual_tcp_pose()
+      kill h
+      stopl(2.0)
+      return "Z;" + tcpc__poseStr(pz)
+    elif (tcpc__mStatus > 1):
+      kill h
+      stopl(2.0)
+      return "Z;FAIL"
+    end
+    sync()
+  end
+  return "Z;FAIL"
+end
+
+# Live path: search Z and send the reply over a fresh socket (one secondary program).
+def tcpc__runSearchZ(pCenter, in1, in2, zSearch, zImmerse, acc, vel, host, port):
+  tcpc__send(host, port, tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel))
+end
+
+# ---------------------------------------------------------------------------
+# Runtime path: the running welding program calibrates the TCP by talking to the
+# persistent Java CalibrationServer over one socket. The server directs each step
+# (op 1 = probe circle, 2 = search Z, 0 = done) and does ALL the geometry.
+# Results land in these globals for the rest of the program to use.
+# ---------------------------------------------------------------------------
+tcpc__rtStatus = -1
+tcpc__rtTcp = p[0,0,0,0,0,0]
+tcpc__rtDiam = 0.0
+
+def tcpc__rtSend(msg):
+  socket_send_string(msg, "giatcp")
+  socket_send_byte(10, "giatcp")
+end
+
+def tcpc__rtCalib(host, port, initLine, in1, in2, radius, acc, vel, overrun, zSearch, zImmerse):
+  tcpc__rtStatus = 1   # NO_ROBOT_REPLY until the server hands back a result
+  tcpc__rtTcp = p[0,0,0,0,0,0]
+  tcpc__rtDiam = 0.0
+  if (not socket_open(host, port, "giatcp")):
+    return False
+  end
+  tcpc__rtSend(initLine)
+  local done = False
+  local misses = 0
+  while ((not done) and (misses < 15)):
+    local m = socket_read_ascii_float(9, "giatcp", 20)
+    if (m[0] == 9):
+      misses = 0
+      local op = m[1]
+      local pose = p[m[2],m[3],m[4],m[5],m[6],m[7]]
+      if (op == 1):
+        tcpc__rtSend(tcpc__circleMsg(pose, in1, in2, radius, acc, vel, overrun))
+      elif (op == 2):
+        tcpc__rtSend(tcpc__searchZMsg(pose, in1, in2, zSearch, zImmerse, acc, vel))
+      else:
+        tcpc__rtStatus = m[8]
+        tcpc__rtTcp = pose
+        tcpc__rtDiam = m[9]
+        done = True
+      end
+    else:
+      misses = misses + 1
+    end
+  end
+  socket_close("giatcp")
+  return done
+end
