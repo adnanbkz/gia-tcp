@@ -280,8 +280,7 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 
 	@Override
 	public boolean isDefined() {
-		GiaTcp tcp = getSelectedTcp();
-		return tcp != null && tcp.isReadyForCalibration();
+		return readinessIssueKey() == null;
 	}
 
 	/**
@@ -316,6 +315,12 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		if (!inst.isRefResolvable(tcp.refTcp)) {
 			return "TC_ISSUE_REF_UNRESOLVABLE";
 		}
+		// CAPTRON gate: the node only runs against a referenced baseline. The exception is
+		// a referencing run itself (persist, Validate/Recalibrate) — that is how the TCP
+		// gets referenced in Local mode in the first place.
+		if (!tcp.calibrated && !(isPersistReference() && getAction() != Const.ACTION_CHECK)) {
+			return "TC_ISSUE_NOT_REFERENCED";
+		}
 		return null;
 	}
 
@@ -336,19 +341,30 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 			writer.appendLine("halt");
 			return;
 		}
+		int action = getAction();
+		// Referencing (persist) is what CREATES the baseline, so it is the only run allowed on
+		// an unreferenced TCP; Check is positional-only and needs the baseline to exist.
+		boolean persist = isPersistReference() && action != Const.ACTION_CHECK;
+		if (!tcp.calibrated && !persist) {
+			writer.appendLine("popup(\"GIA TCP: TCP not referenced yet - run once with 'Save as installation reference'\", title=\"GIA TCP\", blocking=True)");
+			writer.appendLine("halt");
+			return;
+		}
 		CalibParams p = tcp.params;
 		double[] refPose = inst.resolveTcpPoseSi(tcp.refTcp);
 
 		double factor = getSpeed() == 0 ? 0.5 : (getSpeed() == 2 ? 1.5 : 1.0);
 		String acc = UrScript.num(p.accelMmS2 / 1000.0);
 		String vel = UrScript.num(p.speedMmS * factor / 1000.0);
+		// Fast first leg to the approach point (CAPTRON 80/60 x factor, mm -> SI).
+		String accApp = UrScript.num(80.0 * factor / 1000.0);
+		String velApp = UrScript.num(60.0 * factor / 1000.0);
 		String radius = UrScript.num(p.radiusMm);
 		String overrun = UrScript.num(p.overrunDeg);
 		String zSearch = UrScript.num(p.signedSearchZMm());
 		String zImmerse = UrScript.num(p.signedImmerseZMm(getImmerseZ()));
 		String approachZ = UrScript.num(p.signedApproachZMm(getApproachZ()) / 1000.0);
 		int adj = isAdjustAngle() ? 1 : 0;
-		boolean persist = isPersistReference();
 		// Referencing measures + stores a baseline, so it must never fail on the tolerance band.
 		String tolX = persist ? "999" : UrScript.num(getTol("X"));
 		String tolY = persist ? "999" : UrScript.num(getTol("Y"));
@@ -380,44 +396,72 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		// CAPTRON parity: Check/Validate must not leak the reference TCP into the rest of
 		// the program, so the previous TCP is backed up and restored at the end. Recalibrate
 		// intentionally does not restore (its point is to continue with the corrected TCP).
-		boolean restoreTcp = getAction() != Const.ACTION_RECALIBRATE;
+		boolean restoreTcp = action != Const.ACTION_RECALIBRATE;
 		if (restoreTcp) {
 			writer.appendLine("giaTcpBak = get_tcp_offset()");
 		}
-		// Probe with the reference TCP active and start above the cross for a safe approach.
+		// Probe with the reference TCP active. CAPTRON anchors Check/Validate above the
+		// referenced pose (h()) and Recalibrate above the taught centre (j()).
 		writer.appendLine("set_tcp(" + UrScript.pose(refPose) + ")");
-		writer.appendLine("giaTcpApproach = pose_trans(" + UrScript.pose(tcp.centerPose)
+		double[] anchor = action == Const.ACTION_RECALIBRATE ? tcp.centerPose : tcp.correctionRefPose();
+		writer.appendLine("giaTcpApproach = pose_trans(" + UrScript.pose(anchor)
 				+ ", p[0,0," + approachZ + ",0,0,0])");
-		writer.appendLine("movel(giaTcpApproach, a=" + acc + ", v=" + vel + ")");
-		writer.appendLine("movel(" + UrScript.pose(tcp.centerPose) + ", a=" + acc + ", v=" + vel + ")");
-		writer.appendLine("tcpc__rtCalib(\"127.0.0.1\", " + CalibrationServer.PORT + ", \"" + initLine + "\", "
+
+		String lightCheck = "tcpc__lightCheck(" + UrScript.pose(tcp.correctionRefPose()) + ", "
+				+ tcp.ioX + ", " + tcp.ioY + ", " + zImmerse + ", " + acc + ", " + vel + ")";
+		String rtCalib = "tcpc__rtCalib(\"127.0.0.1\", " + CalibrationServer.PORT + ", \"" + initLine + "\", "
 				+ tcp.ioX + ", " + tcp.ioY + ", " + radius + ", " + acc + ", " + vel + ", " + overrun + ", "
-				+ zSearch + ", " + zImmerse + ")");
-		// CAPTRON parity: retract to the approach height after the action (ok or not), so the
-		// program never continues its path from between the sensor forks.
+				+ zSearch + ", " + zImmerse + ")";
+
+		// CAPTRON retry loop: the action repeats until it succeeds. Each iteration starts
+		// from the approach point, and the If-Error child (which runs every iteration when
+		// error handling is on) decides between silent retries and the user's recovery
+		// nodes via giaTcpErrCount. Without error handling the action runs exactly once.
+		writer.appendLine("giaTcpErrCount = 0");
+		writer.appendLine("global giaTcpOk = False");
+		writer.whileCondition("not giaTcpOk");
+		writer.appendLine("movel(giaTcpApproach, a=" + accApp + ", v=" + velApp + ")");
+		if (action == Const.ACTION_CHECK) {
+			// Light check (CAPTRON Check): no probing - verify the tool still cuts both
+			// beams at the referenced pose, forgiving up to Immerse Z of wear.
+			writer.appendLine("tcpc__rtStatus = " + lightCheck);
+		} else if (action == Const.ACTION_VALIDATE) {
+			// CAPTRON Validate: light check first (fails fast with a precise status when
+			// the tool is gone/bent), then the full probe with tolerances.
+			writer.appendLine("tcpc__rtStatus = " + lightCheck);
+			writer.ifCondition("tcpc__rtStatus == 0");
+			writer.appendLine(rtCalib);
+			writer.end();
+		} else {
+			// Recalibrate: the tool may be far off after a nozzle/wire change, so no light
+			// check - probe fresh around the taught centre (CAPTRON j()).
+			writer.appendLine("movel(" + UrScript.pose(tcp.centerPose) + ", a=" + acc + ", v=" + vel + ")");
+			writer.appendLine(rtCalib);
+		}
+		writer.appendLine("global giaTcpOk = (tcpc__rtStatus == 0)");
+		// CAPTRON parity: retract to the approach height after the action (ok or not), so
+		// retries and the rest of the program never start from between the sensor forks.
 		writer.appendLine("movel(giaTcpApproach, a=" + acc + ", v=" + vel + ")");
 
-		// Status: 0 = OK, 4 = OUT_OF_TOLERANCE (measured, but outside the band). Check accepts both
-		// (tool found); Validate/Recalibrate require an in-tolerance result.
-		String okExpr = getAction() == Const.ACTION_CHECK
-				? "(tcpc__rtStatus == 0 or tcpc__rtStatus == 4)" : "(tcpc__rtStatus == 0)";
-		writer.appendLine("global giaTcpOk = " + okExpr);
-
-		if (getAction() == Const.ACTION_RECALIBRATE) {
+		if (action == Const.ACTION_RECALIBRATE) {
 			String var = isUseCustomVar() && !getCustomVar().isEmpty() ? getCustomVar() : Const.DEFAULT_RECALIB_VAR;
-			writer.appendLine("if (tcpc__rtStatus == 0):");
-			writer.appendLine("  global " + var + " = tcpc__rtTcp");
+			writer.ifCondition("tcpc__rtStatus == 0");
+			writer.appendLine("global " + var + " = tcpc__rtTcp");
 			if (isSetTcpAfter()) {
-				writer.appendLine("  set_tcp(tcpc__rtTcp)");
+				writer.appendLine("set_tcp(tcpc__rtTcp)");
 			}
-			writer.appendLine("end");
+			writer.end();
 		}
 
 		if (isErrHandling()) {
-			writer.ifCondition("not giaTcpOk");
+			// The If-Error child guards itself on giaTcpOk and manages giaTcpErrCount.
 			writer.writeChildren();
+		} else {
+			writer.ifCondition("not giaTcpOk");
+			writer.appendLine("break");
 			writer.end();
 		}
+		writer.end();
 
 		// Restore last (as CAPTRON): the If-Error children still run with the reference
 		// TCP active, which is what centre-relative recovery motion needs.

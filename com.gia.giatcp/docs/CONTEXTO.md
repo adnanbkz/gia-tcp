@@ -235,10 +235,46 @@ Arreglos aplicados:
   horquillas no coplanarias. La pose MEDIDA que se devuelve a Java sigue siendo el flanco de corte:
   la corrección Z no cambia. Aplica a test live y al nodo runtime (misma primitiva).
 
-**Pendientes menores:** Check re-mide completo (no el immerse-only ligero de CAPTRON); queda por
-decidir si migrar wizard y repetibilidad al stack nuevo; el ajuste RX/RY del stack nuevo es
-single-shot (los parámetros `iterator`/`accuracyDeg` del wizard solo los usa el stack legacy —
-la iteración con re-centrado queda para cuando se valide XYZ en hardware).
+### 2026-07-06 — Prioridad alta de MEJORAS_PENDIENTES (items 1-5 + 10)
+
+- **Check ligero (paridad CAPTRON `cap_immerseZ`/`cap_checkCalib`).** El nodo Check ya NO sondea:
+  nueva primitiva `tcpc__lightCheck(pRef, in1, in2, zImmerse, acc, vel)` en `tcpcalib.script` —
+  va a la pose referenciada, verifica ambos haces cortados y, si no, inmersión lenta (0.2×) de
+  hasta Immerse Z para perdonar desgaste mínimo; sin servidor 5512 y sin círculo. Validate hace
+  el light check ANTES del sondeo completo (falla rápido con estado preciso, como CAPTRON);
+  Recalibrate no lo hace (la herramienta puede estar lejos tras el cambio de boquilla).
+- **Bucle de reintento del nodo ("Try again x times").** `generateScript` envuelve la acción en
+  `while (not giaTcpOk)`: cada iteración arranca del punto de aproximación y termina retirándose
+  a él. El hijo If-Error corre CADA iteración (también en éxito, para resetear `giaTcpErrCount`)
+  y decide entre reintento silencioso y ejecutar los hijos de recuperación: radio "inmediato" vs
+  "reintentar N veces" en su vista (claves `errRetryEnabled`/`errRetryCount`, default 2 como
+  CAPTRON). Sin error handling: un intento y `break`. OJO paridad CAPTRON: con error handling
+  activado el bucle repite hasta OK — la recuperación del usuario debe corregir la causa o parar
+  el programa (documentado en la vista).
+- **Estados de error finos.** `Status` ampliado (ordinales son protocolo — solo añadir al final):
+  `INPUT_LOW_AT_CENTER` (6, CAPTRON 4/21: no corta ambos haces en la referencia) e
+  `IMMERSE_FAILED` (7, CAPTRON 31). `tcpc__searchZMsg` devuelve `Z;FAIL;LOW|SEARCH|IMMERSE`;
+  `CalibCsv.parseZ` → nuevo `ZSearchResult` (pose o motivo tipado); `ProbeTransport.searchZ`
+  cambió de firma. Textos ES/EN nuevos (`TC_ST_INPUT_LOW`, `TC_ST_IMMERSE`).
+- **Gate de referenciado (CAPTRON `isDefined` con `c.b()`).** El nodo queda amarillo
+  (`TC_ISSUE_NOT_REFERENCED`) si el TCP no está referenciado, SALVO que sea una pasada de
+  referenciado (persist + Validate/Recalibrate) — esa excepción es nuestra adaptación: en modo
+  Local el nodo con persist ES el camino para referenciar (CAPTRON no la necesita porque su
+  wizard referencia). Check con persist no cuenta (no mide). Guard equivalente en
+  `generateScript` (popup + halt).
+- **Stop en el test live del nodo.** Botón Stop junto a "Calibrar (test)" en
+  `TCPCalibrationView`, mismo mecanismo que el del Overview (`stopTestCalibration`); si el
+  usuario paró, el diálogo dice "Test detenido" en vez de "sin respuesta".
+- **Bonus (item 10): aproximación rápida en dos tramos.** Primer tramo al punto de aproximación
+  a `80·factor` mm/s² / `60·factor` mm/s (CAPTRON), tramo final a velocidad de sondeo. Anclaje
+  del approach como CAPTRON: Check/Validate sobre la pose referenciada (h()), Recalibrate sobre
+  el centro enseñado (j()).
+- Tests: 35 verdes (7 nuevos: `CalibCsvZParseTest`, `TCPCalibrationRunnerZFailureTest`).
+
+**Pendientes menores:** queda por decidir si migrar wizard y repetibilidad al stack nuevo; el
+ajuste RX/RY del stack nuevo es single-shot (los parámetros `iterator`/`accuracyDeg` del wizard
+solo los usa el stack legacy — la iteración con re-centrado queda para cuando se valide XYZ en
+hardware). Resto en `docs/MEJORAS_PENDIENTES.md`.
 
 ---
 
@@ -254,7 +290,7 @@ README del proyecto.
 
 - **NO** modificar el núcleo matemático de GIAWeld (`Maths`/`SeamTracking`/poses sincronizadas) sin
   permiso explícito. El math nuevo de giatcp es código propio → OK tocarlo.
-- giatcp **no está bajo git** → los borrados no se recuperan.
+- giatcp está bajo git (rama `Codex`) desde 2026-07: commitear versiones estables al cerrar cada bloque.
 - Idioma del usuario: **español**. Textos para el jefe: serios, sin emojis, sin la palabra "jefe",
   escritos como si los hubiera escrito el usuario.
 - El usuario prefiere aclaraciones conversacionales antes que cuestionarios.

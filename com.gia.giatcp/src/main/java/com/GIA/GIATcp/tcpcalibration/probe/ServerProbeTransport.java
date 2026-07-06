@@ -4,6 +4,7 @@ import com.GIA.GIATcp.tcpcalibration.engine.ProbeTransport;
 import com.GIA.GIATcp.tcpcalibration.model.CircleData;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationResult;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationSpec;
+import com.GIA.GIATcp.tcpcalibration.model.ZSearchResult;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -52,10 +53,10 @@ final class ServerProbeTransport implements ProbeTransport {
 	}
 
 	@Override
-	public double[] searchZ(double[] pCentre, TCPCalibrationSpec s) {
+	public ZSearchResult searchZ(double[] pCentre, TCPCalibrationSpec s) {
 		try {
 			sendOp(OP_SEARCH_Z, pCentre, 0, 0.0);
-			return CalibCsv.parseTaggedPose(in.readLine(), "Z");
+			return CalibCsv.parseZ(in.readLine());
 		} catch (IOException e) {
 			return null;
 		}

@@ -18,6 +18,7 @@ com/GIA/GIATcp/installation/wizard/SetupWizard.class
 com/GIA/GIATcp/installation/overview/OverviewCard$4.class
 com/GIA/GIATcp/util/comms/DashboardClient.class
 com/GIA/GIATcp/installation/model/TcpVariant.class
+com/GIA/GIATcp/program/errhandling/ProgErrHandlingContribution$2.class
 com/GIA/GIATcp/installation/InstallationService.class
 com/GIA/GIATcp/impl/Activator.class
 com/GIA/GIATcp/tcpcalibration/engine/CalibrationResultSink.class
@@ -55,6 +56,7 @@ com/GIA/GIATcp/util/comms/PrimaryScriptSender.class
 com/GIA/GIATcp/util/UrScript.class
 com/GIA/GIATcp/installation/overview/OverviewCard$3$2.class
 com/GIA/GIATcp/tcpcalibration/model/TCPCalibrationResult.class
+com/GIA/GIATcp/program/errhandling/ProgErrHandlingContribution$3.class
 com/GIA/GIATcp/tcpcalibration/probe/CalibCsv.class
 com/GIA/GIATcp/tcpcalibration/TCPCalibrationView.class
 com/GIA/GIATcp/installation/InstallationContribution$LiveInput.class
@@ -62,6 +64,7 @@ com/GIA/GIATcp/installation/model/TcpStore.class
 com/GIA/GIATcp/tcpcalibration/engine/ProbeTransport.class
 com/GIA/GIATcp/util/Ui.class
 com/GIA/GIATcp/installation/measure/RepeatabilityResult.class
+com/GIA/GIATcp/tcpcalibration/model/ZSearchResult.class
 com/GIA/GIATcp/util/Ui$3$1.class
 com/GIA/GIATcp/util/comms/RobotRealtimeReader.class
 com/GIA/GIATcp/program/action/ProgTcpActionService.class

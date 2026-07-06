@@ -23,10 +23,25 @@ URCap de GIA ROBOTICS para comprobar, validar y recalibrar el TCP de una herrami
 ### Nodo De Programa
 
 - El nodo activo se llama `GIA TCP` y lo registra `TCPCalibrationService`.
-- `generateScript()` llama a `tcpc__rtCalib(...)`.
+- `generateScript()` llama a `tcpc__rtCalib(...)` (Validate/Recalibrate) o a `tcpc__lightCheck(...)` (Check).
 - El robot solo ejecuta movimiento realtime, lectura de entradas y captura de `get_actual_tcp_pose()`.
 - `CalibrationServer` escucha en `127.0.0.1:5512`, dirige los pasos del robot y hace toda la geometria en Java.
-- Acciones disponibles: Check, Validate y Recalibrate.
+- Acciones (paridad CAPTRON): `Check` es un chequeo ligero SIN sondeo (va a la pose referenciada,
+  verifica que ambos haces quedan cortados y si no inmersa hasta Immerse Z para perdonar desgaste
+  minimo) - es la accion rapida para usar entre soldaduras. `Validate` hace ese chequeo ligero y
+  despues el sondeo completo con tolerancias. `Recalibrate` sondea directo desde el centro
+  ensenado (tras cambio de boquilla la herramienta puede estar lejos).
+- Bucle de reintento (paridad CAPTRON): la accion se repite hasta terminar OK; el nodo If Error
+  corre en cada iteracion y decide entre reintento silencioso ("reintentar N veces", contador
+  `giaTcpErrCount`) o ejecutar los hijos de recuperacion. Sin error handling: un solo intento.
+  La recuperacion debe corregir la causa o parar el programa (Halt/aviso bloqueante).
+- Gate de referenciado: el nodo queda amarillo si el TCP no esta referenciado; la excepcion es la
+  pasada de referenciado (persist + Validate/Recalibrate), que es el camino oficial en modo Local.
+- Estados de error: ademas de los genericos, `INPUT_LOW_AT_CENTER` (no corta ambos haces en la
+  referencia: TCP/teach/herramienta doblada) e `IMMERSE_FAILED` (herramienta desgastada o ausente).
+- Aproximacion en dos tramos: tramo rapido a `80/60 x factor` hasta el punto de aproximacion y
+  tramo final a velocidad de sondeo (anclada en la pose referenciada para Check/Validate y en el
+  centro ensenado para Recalibrate).
 - Tolerancias por eje X/Y/Z y de diametro (fila con el simbolo de diametro): Validate/Recalibrate fallan si la correccion o el diametro sondeado salen de banda.
 - Diametro (semantica CAPTRON): el referenciado guarda la medida cruda; en runtime se corrige con `diametro real - diametro referenciado` (si hay diametro real configurado) y se compara contra la banda.
 - Referencia de pose (semantica CAPTRON): el referenciado guarda la pose medida en el plano de haces; las calibraciones posteriores miden su correccion contra esa pose (no contra el centro enseñado a mano), asi el error del teach desaparece tras el primer referenciado. El circulo de sondeo sigue arrancando en el centro enseñado. Re-enseñar el centro invalida la referencia y obliga a re-referenciar.

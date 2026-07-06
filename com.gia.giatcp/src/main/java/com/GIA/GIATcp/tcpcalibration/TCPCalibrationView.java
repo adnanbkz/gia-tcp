@@ -76,7 +76,10 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 	private final JCheckBox cErrHandling = new JCheckBox();
 	private final JCheckBox cPersistRef = new JCheckBox();
 	private final JButton calibrateNow = new JButton();
+	private final JButton stopTest = new JButton();
 	private final JLabel setupBanner = new JLabel();
+	/** Set when the user pressed Stop, so the result dialog says "stopped", not "no reply". */
+	private volatile boolean stopRequested;
 
 	private Texts t;
 	private ContributionProvider<TCPCalibrationContribution> provider;
@@ -140,9 +143,11 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		actionGroup.add(rCheck);
 		actionGroup.add(rValidate);
 		actionGroup.add(rRecalibrate);
-		rCheck.addActionListener(e -> set(c -> c.setAction(Const.ACTION_CHECK)));
-		rValidate.addActionListener(e -> set(c -> c.setAction(Const.ACTION_VALIDATE)));
-		rRecalibrate.addActionListener(e -> set(c -> c.setAction(Const.ACTION_RECALIBRATE)));
+		// The readiness gate depends on the action (Check requires a referenced TCP), so
+		// the banner is re-evaluated on every action / persist change.
+		rCheck.addActionListener(e -> { set(c -> c.setAction(Const.ACTION_CHECK)); refreshIssueBanner(); });
+		rValidate.addActionListener(e -> { set(c -> c.setAction(Const.ACTION_VALIDATE)); refreshIssueBanner(); });
+		rRecalibrate.addActionListener(e -> { set(c -> c.setAction(Const.ACTION_RECALIBRATE)); refreshIssueBanner(); });
 		actionRow.add(rCheck);
 		actionRow.add(rValidate);
 		actionRow.add(rRecalibrate);
@@ -163,7 +168,10 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		southRow.add(cErrHandling);
 		cPersistRef.setText(t.t("ACT_PERSIST_REF"));
 		cPersistRef.setToolTipText(t.t("ACT_PERSIST_REF_HINT"));
-		cPersistRef.addActionListener(e -> set(c -> c.setPersistReference(cPersistRef.isSelected())));
+		cPersistRef.addActionListener(e -> {
+			set(c -> c.setPersistReference(cPersistRef.isSelected()));
+			refreshIssueBanner();
+		});
 		southRow.add(cPersistRef);
 
 		// Calibrate live from the node itself: same path as the installation "test" button — a
@@ -175,6 +183,12 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		calibrateNow.setText(t.t("BTN_CALIBRATE_TEST"));
 		calibrateNow.addActionListener(e -> runLiveCalibration());
 		calibRow.add(calibrateNow);
+		// Stop for the live test (same mechanism as the Overview Stop): a preempting
+		// secondary program halts the probe motion and unblocks the pending reply read.
+		stopTest.setText(t.t("BTN_STOP"));
+		stopTest.setEnabled(false);
+		stopTest.addActionListener(e -> onStopTest());
+		calibRow.add(stopTest);
 
 		JPanel south = new JPanel(new BorderLayout(0, 4));
 		south.add(calibRow, BorderLayout.NORTH);
@@ -223,6 +237,8 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 	/** Runs the actual probe once the robot sits at the taught centre. */
 	private void startNodeProbe(final InstallationContribution inst, final GiaTcp tcp) {
 		calibrateNow.setEnabled(false);
+		stopRequested = false;
+		stopTest.setEnabled(true);
 		new Thread(() -> {
 			TCPCalibrationResult r;
 			try {
@@ -233,13 +249,33 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 			final TCPCalibrationResult res = r;
 			SwingUtilities.invokeLater(() -> {
 				calibrateNow.setEnabled(true);
+				stopTest.setEnabled(false);
 				showResult(res);
 			});
 		}, "gia-tcp-node-probe").start();
 	}
 
+	/** Aborts the running live test; off the EDT because it opens a socket to the robot. */
+	private void onStopTest() {
+		final TCPCalibrationContribution c = provider.get();
+		final InstallationContribution inst = c.getInstallation();
+		if (inst == null) {
+			return;
+		}
+		stopRequested = true;
+		stopTest.setEnabled(false);
+		new Thread(inst::stopTestCalibration, "gia-tcp-node-stop").start();
+	}
+
 	private void showResult(TCPCalibrationResult r) {
 		String title = t.t("BTN_CALIBRATE_TEST");
+		// A stopped probe surfaces as "no reply" (the STOP line unblocks the read with no
+		// valid result); tell the user it was their stop, not a comms problem.
+		if (stopRequested && (r == null || r.status == TCPCalibrationResult.Status.NO_ROBOT_REPLY)) {
+			JOptionPane.showMessageDialog(calibrateNow, t.t("TC_TEST_STOPPED"), title,
+					JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
 		if (r == null) {
 			JOptionPane.showMessageDialog(calibrateNow, t.t("TC_ST_NO_REPLY"), title, JOptionPane.WARNING_MESSAGE);
 			return;
@@ -262,6 +298,8 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 			case SEARCH_Z_FAILED:          return t.t("TC_ST_SEARCH_Z");
 			case OUT_OF_TOLERANCE:         return t.t("TC_ST_OUT_TOL");
 			case ORIENTATION_NOT_POSSIBLE: return t.t("TC_ST_ORIENT");
+			case INPUT_LOW_AT_CENTER:      return t.t("TC_ST_INPUT_LOW");
+			case IMMERSE_FAILED:           return t.t("TC_ST_IMMERSE");
 			default:                       return s.name();
 		}
 	}
@@ -393,7 +431,16 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		cErrHandling.setSelected(c.isErrHandling());
 		cPersistRef.setSelected(c.isPersistReference());
 
-		String issueKey = c.readinessIssueKey();
+		refreshIssueBanner();
+		updating = false;
+	}
+
+	/** Re-evaluates the readiness gate (it depends on action/persist, not just Setup). */
+	private void refreshIssueBanner() {
+		if (provider == null) {
+			return;
+		}
+		String issueKey = provider.get().readinessIssueKey();
 		if (issueKey == null) {
 			setupBanner.setVisible(false);
 		} else {
@@ -401,7 +448,6 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 			setupBanner.setVisible(true);
 		}
 		calibrateNow.setEnabled(issueKey == null);
-		updating = false;
 	}
 
 	private void loadVariables(TCPCalibrationContribution c) {

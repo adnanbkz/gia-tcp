@@ -3,6 +3,7 @@ package com.GIA.GIATcp.tcpcalibration.engine;
 import com.GIA.GIATcp.tcpcalibration.model.CircleData;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationResult;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationSpec;
+import com.GIA.GIATcp.tcpcalibration.model.ZSearchResult;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,8 +34,8 @@ class TCPCalibrationRunnerRefPoseTest {
 		}
 
 		@Override
-		public double[] searchZ(double[] pCentre, TCPCalibrationSpec s) {
-			return new double[] { 0, 0, -0.005, 0, 0, 0 };
+		public ZSearchResult searchZ(double[] pCentre, TCPCalibrationSpec s) {
+			return ZSearchResult.ok(new double[] { 0, 0, -0.005, 0, 0, 0 });
 		}
 
 		private static double[] pose(double x, double y) {

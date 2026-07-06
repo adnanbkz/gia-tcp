@@ -3,6 +3,7 @@ package com.GIA.GIATcp.tcpcalibration.probe;
 import com.GIA.GIATcp.tcpcalibration.engine.ProbeTransport;
 import com.GIA.GIATcp.tcpcalibration.model.CircleData;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationSpec;
+import com.GIA.GIATcp.tcpcalibration.model.ZSearchResult;
 
 import com.GIA.GIATcp.util.UrScript;
 import com.GIA.GIATcp.util.comms.SecondaryScriptSender;
@@ -66,11 +67,11 @@ public final class SecondaryProbeTransport implements ProbeTransport {
 	}
 
 	@Override
-	public double[] searchZ(double[] pCentre, TCPCalibrationSpec s) {
+	public ZSearchResult searchZ(double[] pCentre, TCPCalibrationSpec s) {
 		String call = "tcpc__runSearchZ(" + UrScript.pose(pCentre) + ", " + s.in1 + ", " + s.in2 + ", "
 				+ UrScript.num(s.zSearchMm) + ", " + UrScript.num(s.zImmerseMm) + ", "
 				+ UrScript.num(s.accMs2) + ", " + UrScript.num(s.velMs) + ", \"127.0.0.1\", " + RETURN_PORT + ")";
-		return CalibCsv.parseTaggedPose(sendAndReceive(setTcpLine(s) + call), "Z");
+		return CalibCsv.parseZ(sendAndReceive(setTcpLine(s) + call));
 	}
 
 	/**

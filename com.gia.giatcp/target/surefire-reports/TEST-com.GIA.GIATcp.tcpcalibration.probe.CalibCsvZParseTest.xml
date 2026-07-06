@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.GIA.GIATcp.installation.model.CalibParamsTest" time="0.021" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.GIA.GIATcp.tcpcalibration.probe.CalibCsvZParseTest" time="0.001" tests="4" errors="0" skipped="0" failures="0">
   <properties>
     <property name="sun.desktop" value="gnome"/>
     <property name="awt.toolkit" value="sun.awt.X11.XToolkit"/>
@@ -58,5 +58,8 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="52.0"/>
   </properties>
-  <testcase name="signedZOffsetsFollowInvertZ" classname="com.GIA.GIATcp.installation.model.CalibParamsTest" time="0.013"/>
+  <testcase name="missingOrMalformedLineIsNull" classname="com.GIA.GIATcp.tcpcalibration.probe.CalibCsvZParseTest" time="0"/>
+  <testcase name="mapsFailureReasons" classname="com.GIA.GIATcp.tcpcalibration.probe.CalibCsvZParseTest" time="0"/>
+  <testcase name="parsesPose" classname="com.GIA.GIATcp.tcpcalibration.probe.CalibCsvZParseTest" time="0"/>
+  <testcase name="legacyFailWithoutReasonMapsToSearchZFailed" classname="com.GIA.GIATcp.tcpcalibration.probe.CalibCsvZParseTest" time="0"/>
 </testsuite>

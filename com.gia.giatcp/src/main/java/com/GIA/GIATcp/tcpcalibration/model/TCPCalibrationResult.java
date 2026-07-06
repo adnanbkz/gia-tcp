@@ -3,13 +3,20 @@ package com.GIA.GIATcp.tcpcalibration.model;
 /** Outcome of a calibration run: a status plus the computed TCP correction (when OK). */
 public final class TCPCalibrationResult {
 
+	/**
+	 * Ordinals are wire protocol: the runtime server sends {@code status.ordinal()} to the
+	 * robot and the generated URScript compares the raw numbers (0 = OK, 4 = OUT_OF_TOLERANCE,
+	 * and the light check returns 6/7 directly). Only append values, never reorder.
+	 */
 	public enum Status {
 		OK,
 		NO_ROBOT_REPLY,            // no socket reply (sim / wiring / not connected)
 		NO_INTERSECT,              // circle did not cross both beams cleanly
-		SEARCH_Z_FAILED,           // Z search/immerse never reached the beam plane
+		SEARCH_Z_FAILED,           // Z retract never freed the beams (search motion failed)
 		OUT_OF_TOLERANCE,          // correction outside the XYZ band
-		ORIENTATION_NOT_POSSIBLE   // neither the higher nor the lower circle crossed the beams
+		ORIENTATION_NOT_POSSIBLE,  // neither the higher nor the lower circle crossed the beams
+		INPUT_LOW_AT_CENTER,       // tool does not cut both beams at the intersect (CAPTRON 4/21: bad teach/TCP/tool)
+		IMMERSE_FAILED             // immerse never re-cut both beams (CAPTRON 31: tool worn/missing)
 	}
 
 	public final Status status;

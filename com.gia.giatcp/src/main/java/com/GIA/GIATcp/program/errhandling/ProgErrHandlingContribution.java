@@ -20,8 +20,11 @@ import org.apache.logging.log4j.Logger;
 import java.lang.invoke.MethodHandles;
 
 /**
- * Container node for user-defined error-handling logic. Its script is the script
- * of its child nodes; the parent action node decides when this subtree runs.
+ * Container node for user-defined error-handling logic. The parent GIA TCP node runs it
+ * every retry-loop iteration; this node guards itself on {@code giaTcpOk} and implements
+ * CAPTRON's "Try again x times": either the recovery children run on every failure, or
+ * only after N silent retries ({@code giaTcpErrCount}, initialised by the parent and
+ * reset here on success or once the children have run).
  *
  * <p>To mirror CAPTRON's "If Error" layout, it auto-inserts one empty {@code FolderNode}
  * named "Insert your error handling here" the first time the node is opened, so the
@@ -36,6 +39,7 @@ public class ProgErrHandlingContribution implements ProgramNodeContribution {
 	private final UndoRedoManager undoRedoManager;
 	private final Texts texts;
 	private final DataModel model;
+	private final ProgErrHandlingView view;
 
 	public ProgErrHandlingContribution(ProgramAPIProvider apiProvider, ProgErrHandlingView view, DataModel model) {
 		ProgramAPI programAPI = apiProvider.getProgramAPI();
@@ -43,6 +47,35 @@ public class ProgErrHandlingContribution implements ProgramNodeContribution {
 		this.undoRedoManager = programAPI.getUndoRedoManager();
 		this.texts = Texts.from(apiProvider.getSystemAPI().getSystemSettings().getLocalization());
 		this.model = model;
+		this.view = view;
+	}
+
+	// ---------------- retry options (CAPTRON "Try again x times") ----------------
+
+	public boolean isRetryEnabled() {
+		return model.get(Const.K_ERR_RETRY_ENABLED, false);
+	}
+
+	public void setRetryEnabled(final boolean v) {
+		undoRedoManager.recordChanges(new UndoableChanges() {
+			@Override
+			public void executeChanges() {
+				model.set(Const.K_ERR_RETRY_ENABLED, v);
+			}
+		});
+	}
+
+	public int getRetryCount() {
+		return model.get(Const.K_ERR_RETRY_COUNT, Const.DEF_ERR_RETRY_COUNT);
+	}
+
+	public void setRetryCount(final int v) {
+		undoRedoManager.recordChanges(new UndoableChanges() {
+			@Override
+			public void executeChanges() {
+				model.set(Const.K_ERR_RETRY_COUNT, Math.max(1, v));
+			}
+		});
 	}
 
 	/**
@@ -81,6 +114,7 @@ public class ProgErrHandlingContribution implements ProgramNodeContribution {
 	@Override
 	public void openView() {
 		ensurePlaceholderFolder();
+		view.update(this);
 	}
 
 	@Override
@@ -99,6 +133,20 @@ public class ProgErrHandlingContribution implements ProgramNodeContribution {
 
 	@Override
 	public void generateScript(ScriptWriter writer) {
-		writer.writeChildren();
+		// Runs inside the parent's retry loop, every iteration (also on success, to reset
+		// the counter — CAPTRON does the same with capErrCount).
+		writer.ifCondition("not giaTcpOk");
+		if (isRetryEnabled()) {
+			writer.appendLine("giaTcpErrCount = giaTcpErrCount + 1");
+			writer.ifCondition("giaTcpErrCount >= " + getRetryCount());
+			writer.appendLine("giaTcpErrCount = 0");
+			writer.writeChildren();
+			writer.end();
+		} else {
+			writer.writeChildren();
+		}
+		writer.elseCondition();
+		writer.appendLine("giaTcpErrCount = 0");
+		writer.end();
 	}
 }

@@ -2,6 +2,7 @@ package com.GIA.GIATcp.tcpcalibration.engine;
 
 import com.GIA.GIATcp.tcpcalibration.model.CircleData;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationSpec;
+import com.GIA.GIATcp.tcpcalibration.model.ZSearchResult;
 
 /**
  * Abstracts how the robot is driven through the realtime probe primitives. The
@@ -22,6 +23,6 @@ public interface ProbeTransport {
 	/** Moves to {@code pStart}, runs one probe circle, returns the raw edge poses (or null). */
 	CircleData probeCircle(double[] pStart, TCPCalibrationSpec s);
 
-	/** Searches Z at {@code pCentre}, returns the beam-plane pose (or null on failure). */
-	double[] searchZ(double[] pCentre, TCPCalibrationSpec s);
+	/** Searches Z at {@code pCentre}: beam-plane pose or a typed failure (null = no reply). */
+	ZSearchResult searchZ(double[] pCentre, TCPCalibrationSpec s);
 }

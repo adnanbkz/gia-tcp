@@ -61,17 +61,33 @@ mover-robot y sondea automaticamente al llegar. Cada programa inyectado empieza 
 
 El nodo activo es `GIA TCP`.
 
-- Check: mide y acepta tambien resultado fuera de tolerancia si la herramienta fue encontrada.
-- Validate: mide y falla si la correccion sale de tolerancia.
+- Check (ligero, paridad CAPTRON): NO sondea. Va a la pose referenciada, comprueba que ambos
+  haces quedan cortados y, si no, inmersa despacio hasta Immerse Z para perdonar desgaste
+  minimo; solo falla si aun asi no corta ambos haces. Es la accion rapida entre soldaduras.
+  Requiere TCP referenciado.
+- Validate: chequeo ligero primero (falla rapido con estado preciso si la herramienta no esta)
+  y despues mide el circulo completo; falla si la correccion sale de tolerancia.
 - Referencia de pose (semantica CAPTRON): la correccion se mide contra la pose capturada en el
   referenciado (no contra el centro enseñado); el centro enseñado solo es el punto de arranque
   del sondeo. Re-enseñar el centro borra la referencia y hay que volver a referenciar.
 - Tolerancias: banda +/- por eje X/Y/Z y banda de diametro. El diametro sondeado se corrige
   con `real - referenciado` (semantica CAPTRON; el referenciado guarda la medida cruda) y se
   compara contra el diametro real configurado, o contra el referenciado si no hay real.
-- Recalibrate: mide, devuelve el TCP corregido, lo asigna a variable y opcionalmente ejecuta `set_tcp`.
-- If Error: nodo hijo auto-insertado que se ejecuta si la accion no termina OK.
-- Guardar como referencia de instalacion: permite referenciar desde un programa con Play, util en modo Local.
+- Recalibrate: mide desde el centro ensenado (sin chequeo previo: tras un cambio de boquilla la
+  herramienta puede estar lejos), devuelve el TCP corregido, lo asigna a variable y
+  opcionalmente ejecuta `set_tcp`.
+- Bucle de reintento: la accion se repite hasta terminar OK (cada intento arranca y termina en
+  el punto de aproximacion). Sin error handling se ejecuta una sola vez.
+- If Error: nodo hijo auto-insertado que corre en cada iteracion del bucle. Dos modos: ejecutar
+  la recuperacion inmediatamente, o "reintentar N veces" en silencio y solo entonces ejecutar la
+  recuperacion (default 2, como CAPTRON). IMPORTANTE: si la recuperacion no corrige la causa ni
+  detiene el programa (Halt / aviso bloqueante), el nodo sigue reintentando.
+- Gate de referenciado: el nodo queda amarillo ("no definido") si el TCP no esta referenciado.
+  Excepcion: una pasada con "Guardar como referencia" + Validate/Recalibrate, que es justamente
+  como se referencia en modo Local.
+- Guardar como referencia de instalacion: permite referenciar desde un programa con Play, util
+  en modo Local. No aplica a Check (no mide).
+- Stop: el test live del nodo ("Calibrar (test)") tiene boton Stop, igual que el del Overview.
 
 ## 4. Distancias Y Z
 

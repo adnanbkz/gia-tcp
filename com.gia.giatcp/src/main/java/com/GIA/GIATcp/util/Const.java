@@ -111,7 +111,7 @@ public final class Const {
 	// ----- Error-handling child node keys -----
 	public static final String K_ERR_RETRY_ENABLED = "errRetryEnabled"; // boolean
 	public static final String K_ERR_RETRY_COUNT = "errRetryCount";     // int
-	public static final int DEF_ERR_RETRY_COUNT = 1;
+	public static final int DEF_ERR_RETRY_COUNT = 2; // CAPTRON default for "Try again x times"
 	public static final String K_ERR_FOLDER_DONE = "errFolderDone";     // boolean: placeholder folder inserted
 
 	// Default recalibration variable name written by the script

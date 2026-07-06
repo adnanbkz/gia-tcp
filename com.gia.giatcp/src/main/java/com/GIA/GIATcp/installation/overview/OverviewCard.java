@@ -379,6 +379,8 @@ public class OverviewCard extends JPanel {
 			case SEARCH_Z_FAILED:          return t.t("TC_ST_SEARCH_Z");
 			case OUT_OF_TOLERANCE:         return t.t("TC_ST_OUT_TOL");
 			case ORIENTATION_NOT_POSSIBLE: return t.t("TC_ST_ORIENT");
+			case INPUT_LOW_AT_CENTER:      return t.t("TC_ST_INPUT_LOW");
+			case IMMERSE_FAILED:           return t.t("TC_ST_IMMERSE");
 			default:                       return s.name();
 		}
 	}

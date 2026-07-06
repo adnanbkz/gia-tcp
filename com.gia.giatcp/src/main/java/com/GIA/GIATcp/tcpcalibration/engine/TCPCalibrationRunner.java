@@ -4,6 +4,7 @@ import com.GIA.GIATcp.tcpcalibration.math.TCPCalibrationMaths;
 import com.GIA.GIATcp.tcpcalibration.model.CircleData;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationResult;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationSpec;
+import com.GIA.GIATcp.tcpcalibration.model.ZSearchResult;
 
 /**
  * Runs the calibration sequence. ALL geometry is done in {@link TCPCalibrationMaths};
@@ -40,11 +41,18 @@ public final class TCPCalibrationRunner {
 			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_INTERSECT);
 		}
 
-		// 2. Z search at the true centre.
-		double[] pSearchZ = transport.searchZ(centre.intersect, s);
-		if (pSearchZ == null) {
+		// 2. Z search at the true centre. Failures carry the robot-reported reason so a bad
+		// teach/TCP (input low at the intersect) reads differently from a failed retract
+		// or immerse; a missing reply keeps the legacy SEARCH_Z_FAILED.
+		ZSearchResult z = transport.searchZ(centre.intersect, s);
+		if (z == null) {
 			return TCPCalibrationResult.error(TCPCalibrationResult.Status.SEARCH_Z_FAILED);
 		}
+		if (z.pose == null) {
+			return TCPCalibrationResult.error(z.failure != null
+					? z.failure : TCPCalibrationResult.Status.SEARCH_Z_FAILED);
+		}
+		double[] pSearchZ = z.pose;
 
 		// 3. Correction (all maths in Java).
 		double[] correction = TCPCalibrationMaths.correction(s.pRef, pSearchZ);

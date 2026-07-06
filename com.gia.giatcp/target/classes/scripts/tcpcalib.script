@@ -138,7 +138,10 @@ thread tcpc__moveThread():
 end
 
 # Move to pCenter, retract until both inputs are low, then immerse in the opposite
-# direction until both are high. Build "Z;<pose>" (beam plane) or "Z;FAIL".
+# direction until both are high. Build "Z;<pose>" (beam plane) or "Z;FAIL;<reason>"
+# where <reason> is LOW (inputs low at the intersect: bad teach/TCP/tool), SEARCH
+# (retract never freed the beams) or IMMERSE (immerse never re-cut them) - Java maps
+# them to distinct statuses (CAPTRON codes 4/5/31).
 # Ends with the tip re-placed midway between the release edge (retract) and the cut
 # edge (immerse), i.e. right between the two beams even if they are not coplanar.
 def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
@@ -147,7 +150,7 @@ def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
     # CAPTRON "input low on intersect position": at the true centre the tool MUST cut
     # both beams. If it does not (wrong teach depth, wrong tool, sensor polarity), abort
     # instead of searching from a meaningless start.
-    return "Z;FAIL"
+    return "Z;FAIL;LOW"
   end
   tcpc__mPos = pose_trans(pCenter, p[0,0,-(zSearch/1000),0,0,0])
   tcpc__mAcc = acc
@@ -171,7 +174,7 @@ def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
     sync()
   end
   if (not found):
-    return "Z;FAIL"
+    return "Z;FAIL;SEARCH"
   end
   tcpc__mPos = pose_trans(pCenter, p[0,0,(zImmerse/1000),0,0,0])
   tcpc__mAcc = acc * .2
@@ -193,16 +196,49 @@ def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
     elif (tcpc__mStatus > 1):
       kill h
       stopl(2.0)
-      return "Z;FAIL"
+      return "Z;FAIL;IMMERSE"
     end
     sync()
   end
-  return "Z;FAIL"
+  return "Z;FAIL;IMMERSE"
 end
 
 # Live path: search Z and send the reply over a fresh socket (one secondary program).
 def tcpc__runSearchZ(pCenter, in1, in2, zSearch, zImmerse, acc, vel, host, port):
   tcpc__send(host, port, tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel))
+end
+
+# Light check (CAPTRON Check / cap_immerseZ): go to the referenced pose and verify the
+# tool still cuts both beams. If not, immerse slowly up to zImmerse to forgive minimal
+# wear (a slightly shorter tool leaves the tip just above the beam plane); only if the
+# beams are never cut the tool is considered lost/bent. NO probing and NO server: this
+# is the fast between-welds action. Returns a status matching the Java enum ordinals:
+# 0 = OK, 6 = INPUT_LOW_AT_CENTER, 7 = IMMERSE_FAILED.
+def tcpc__lightCheck(pRef, in1, in2, zImmerse, acc, vel):
+  movel(pRef, a=acc, v=vel)
+  if (tcpc__getInput(in1) and tcpc__getInput(in2)):
+    return 0
+  end
+  tcpc__mPos = pose_trans(pRef, p[0,0,(zImmerse/1000),0,0,0])
+  tcpc__mAcc = acc * .2
+  tcpc__mVel = vel * .2
+  tcpc__mStatus = 0
+  local h = run tcpc__moveThread()
+  while True:
+    if (tcpc__getInput(in1) and tcpc__getInput(in2)):
+      sleep(0.04)
+      kill h
+      stopl(2.0)
+      if (tcpc__getInput(in1) and tcpc__getInput(in2)):
+        return 0
+      end
+      return 6
+    elif (tcpc__mStatus > 1):
+      return 7
+    end
+    sync()
+  end
+  return 7
 end
 
 # ---------------------------------------------------------------------------

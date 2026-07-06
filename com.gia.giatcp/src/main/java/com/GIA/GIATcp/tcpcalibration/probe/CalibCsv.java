@@ -1,6 +1,8 @@
 package com.GIA.GIATcp.tcpcalibration.probe;
 
 import com.GIA.GIATcp.tcpcalibration.model.CircleData;
+import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationResult;
+import com.GIA.GIATcp.tcpcalibration.model.ZSearchResult;
 
 /** Wire-protocol parsing/formatting for the realtime probe replies, shared by both transports. */
 final class CalibCsv {
@@ -21,17 +23,32 @@ final class CalibCsv {
 		return p;
 	}
 
-	/** Parses a "{tag};x,y,z,rx,ry,rz" reply, or null on FAIL/malformed. */
-	static double[] parseTaggedPose(String line, String tag) {
+	/**
+	 * Parses a Z-search reply: {@code "Z;x,y,z,rx,ry,rz"} on success, or
+	 * {@code "Z;FAIL;LOW|SEARCH|IMMERSE"} with the failure reason ({@code "Z;FAIL"} from
+	 * older scripts maps to SEARCH). Returns null when the line is missing/malformed
+	 * (no reply at all).
+	 */
+	static ZSearchResult parseZ(String line) {
 		if (line == null) {
 			return null;
 		}
 		String[] t = line.trim().split(";");
-		if (t.length < 2 || !tag.equals(t[0]) || "FAIL".equals(t[1].trim())) {
+		if (t.length < 2 || !"Z".equals(t[0])) {
 			return null;
 		}
+		if ("FAIL".equals(t[1].trim())) {
+			String reason = t.length >= 3 ? t[2].trim() : "";
+			if ("LOW".equals(reason)) {
+				return ZSearchResult.fail(TCPCalibrationResult.Status.INPUT_LOW_AT_CENTER);
+			}
+			if ("IMMERSE".equals(reason)) {
+				return ZSearchResult.fail(TCPCalibrationResult.Status.IMMERSE_FAILED);
+			}
+			return ZSearchResult.fail(TCPCalibrationResult.Status.SEARCH_Z_FAILED);
+		}
 		try {
-			return parsePoseCsv(t[1]);
+			return ZSearchResult.ok(parsePoseCsv(t[1]));
 		} catch (RuntimeException e) {
 			return null;
 		}
