@@ -6,8 +6,17 @@ package com.GIA.GIATcp.tcpcalibration.model;
  */
 public final class TCPCalibrationSpec {
 
-	/** Taught centre pose (base frame, SI): tip at the beam cross. Also the correction reference. */
+	/**
+	 * Correction reference pose (base frame, SI): the pose measured at referencing when the
+	 * TCP has been referenced (CAPTRON h()), else the taught centre. The correction is the
+	 * pose delta between this and the measured beam-plane pose.
+	 */
 	public double[] pRef;
+	/**
+	 * Probe start pose (base frame, SI): the taught centre the circle runs around (CAPTRON
+	 * j()/pStart). Null = fall back to {@link #pRef} (both are the same until referenced).
+	 */
+	public double[] pStart;
 	/** Reference TCP offset (SI) active during probing. */
 	public double[] refTcp;
 
@@ -25,6 +34,10 @@ public final class TCPCalibrationSpec {
 	/** XYZ tolerance band (m): the correction must stay within +/- these. */
 	public double[] tolXYZm = { 0.999, 0.999, 0.999 };
 	public double diamOffsetMm = 0.0;
+	/** Expected tool diameter (mm): real diameter if configured, else the referenced one. */
+	public double diamNominalMm = 0.0;
+	/** +/- band (mm) around {@link #diamNominalMm}; 0 disables the diameter check. */
+	public double diamTolMm = 0.0;
 
 	public boolean adjustAngle = false;
 	/** How much to raise (+) / lower (-) the orientation circle vs the XY plane (mm). */

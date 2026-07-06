@@ -117,8 +117,10 @@ public final class CalibrationServer {
 
 	/**
 	 * Parses the handshake line the robot sends:
-	 * {@code INIT;<pRefCsv>;<refTcpCsv>;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm[;tcpId;persist]}.
-	 * The last two fields are optional (older programs omit them). Motion params
+	 * {@code INIT;<pRefCsv>;<refTcpCsv>;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm[;tcpId;persist[;tolDmm;diamNomMm[;pStartCsv]]]}.
+	 * The trailing fields are optional (older programs omit them). {@code pRef} is the
+	 * correction reference (referenced pose, CAPTRON h()); {@code pStart} the taught centre
+	 * the circle runs around (falls back to pRef when absent). Motion params
 	 * (in1/in2, acc, vel, overrun, searchZ) are not needed here — the robot bakes them.
 	 */
 	static TCPCalibrationSpec parseInit(String line) {
@@ -147,6 +149,13 @@ public final class CalibrationServer {
 				s.tcpId = (int) Math.round(Double.parseDouble(t[12].trim()));
 				s.persistToInstallation = Double.parseDouble(t[13].trim()) != 0.0;
 			}
+			if (t.length >= 16) {
+				s.diamTolMm = Double.parseDouble(t[14].trim());
+				s.diamNominalMm = Double.parseDouble(t[15].trim());
+			}
+			if (t.length >= 17) {
+				s.pStart = CalibCsv.parsePoseCsv(t[16]);
+			}
 			return s;
 		} catch (RuntimeException e) {
 			return null;
@@ -167,7 +176,7 @@ public final class CalibrationServer {
 		CalibrationResultSink sink = resultSink;
 		if (measured && sink != null) {
 			try {
-				sink.storeCalibration(spec.tcpId, result.correction, result.diameterMm);
+				sink.storeCalibration(spec.tcpId, result.correction, result.diameterMm, result.measuredPose);
 				logger.info("Referencing persisted for TCP {} (status {})", spec.tcpId, result.status);
 			} catch (RuntimeException e) {
 				logger.warn("Could not persist referencing for TCP {}", spec.tcpId, e);

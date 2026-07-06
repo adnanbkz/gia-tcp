@@ -23,8 +23,22 @@ public class CalibParams {
 	public double maxAngleRxDeg = Const.DEF_MAXANGLE_DEG;
 	public double maxAngleRyDeg = Const.DEF_MAXANGLE_DEG;
 
-	/** Signed search-Z stroke as used by the script (negative when not inverted). */
+	/** Signed search-Z stroke as passed to the script, following CAPTRON's invert-Z convention. */
 	public double signedSearchZMm() {
-		return invertZ ? searchZMm : -searchZMm;
+		return signedZ(Math.abs(searchZMm));
+	}
+
+	/** Signed safe approach offset: same direction as the search retract. */
+	public double signedApproachZMm(double approachMm) {
+		return signedZ(-Math.abs(approachMm));
+	}
+
+	/** Signed immerse offset: opposite to the search retract, back through the beam plane. */
+	public double signedImmerseZMm(double immerseMm) {
+		return signedZ(Math.abs(immerseMm));
+	}
+
+	private double signedZ(double valueMm) {
+		return invertZ ? -valueMm : valueMm;
 	}
 }

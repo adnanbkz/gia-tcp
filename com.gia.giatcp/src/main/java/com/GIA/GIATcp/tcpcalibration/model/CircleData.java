@@ -14,6 +14,10 @@ public final class CircleData {
 	}
 
 	public boolean valid() {
-		return count1 >= 4 && count2 >= 4 && count1 % 2 == 0 && count2 % 2 == 0;
+		// Exactly 2 crossings (4 edges) per beam, as CAPTRON requires. More edges mean
+		// sensor chatter or a crossing inside the overrun arc; silently using the first 4
+		// poses could pair bounce edges and shift the computed centre. The CAPTRON manual
+		// remedies: raise the probe speed (chatter) or adjust the overrun.
+		return count1 == 4 && count2 == 4;
 	}
 }

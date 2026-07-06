@@ -103,7 +103,8 @@ def tcpc__circleMsg(pStart, in1, in2, radius, acc, vel, overrun):
   movec(pts[3], pts[0], a=acc, v=vel, r=.001)
   movep(pts[4], a=acc, v=vel)
   kill h
-  movel(pStart, a=acc, v=vel)
+  # No hop back to pStart (CAPTRON legacy): the next primitive (search Z / next circle)
+  # starts with its own movel, so the return leg only added travel.
   local msg = "C;" + to_str(tcpc__count1) + ";" + to_str(tcpc__count2)
   local i = 0
   while (i < 4):
@@ -136,18 +137,28 @@ thread tcpc__moveThread():
   exit_critical
 end
 
-# Move to pCenter, search down until both inputs low, then immerse up until both
-# high, and build "Z;<pose>" (pose at the beam plane) or "Z;FAIL". Returns the string.
+# Move to pCenter, retract until both inputs are low, then immerse in the opposite
+# direction until both are high. Build "Z;<pose>" (beam plane) or "Z;FAIL".
+# Ends with the tip re-placed midway between the release edge (retract) and the cut
+# edge (immerse), i.e. right between the two beams even if they are not coplanar.
 def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
   movel(pCenter, a=acc, v=vel)
+  if (not (tcpc__getInput(in1) and tcpc__getInput(in2))):
+    # CAPTRON "input low on intersect position": at the true centre the tool MUST cut
+    # both beams. If it does not (wrong teach depth, wrong tool, sensor polarity), abort
+    # instead of searching from a meaningless start.
+    return "Z;FAIL"
+  end
   tcpc__mPos = pose_trans(pCenter, p[0,0,-(zSearch/1000),0,0,0])
   tcpc__mAcc = acc
   tcpc__mVel = vel
   tcpc__mStatus = 0
   local h = run tcpc__moveThread()
   local found = False
+  local pRel = p[0,0,0,0,0,0]
   while True:
     if ((not tcpc__getInput(in1)) and (not tcpc__getInput(in2))):
+      pRel = get_actual_tcp_pose()
       sleep(0.04)
       kill h
       stopl(2.0)
@@ -173,6 +184,11 @@ def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
       local pz = get_actual_tcp_pose()
       kill h
       stopl(2.0)
+      # Final placement (CAPTRON re-places the tip at the beam plane at the end of
+      # its live flow): rise from the cut edge to halfway towards the release edge,
+      # leaving the wire tip right between the beams. The measured pose sent to
+      # Java is still the cut edge, so the Z correction semantics do not change.
+      movel(interpolate_pose(pz, pRel, 0.5), a=acc, v=vel*.2)
       return "Z;" + tcpc__poseStr(pz)
     elif (tcpc__mStatus > 1):
       kill h

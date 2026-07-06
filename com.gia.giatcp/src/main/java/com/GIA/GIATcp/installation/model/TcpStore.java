@@ -99,6 +99,7 @@ public class TcpStore {
 		t.calibrated = model.get(k(Const.K_CALIBRATED, id), false);
 		t.correction = parsePose(model.get(k(Const.K_CORR, id), ""));
 		t.diameterMm = model.get(k(Const.K_DIAM, id), 0.0);
+		t.refPose = parsePose(model.get(k(Const.K_REFPOSE, id), ""));
 
 		CalibParams p = t.params;
 		p.radiusMm = model.get(k(Const.K_RADIUS, id), Const.DEF_RADIUS_MM);
@@ -128,6 +129,7 @@ public class TcpStore {
 		model.set(k(Const.K_CALIBRATED, t.id), t.calibrated);
 		model.set(k(Const.K_CORR, t.id), formatPose(t.correction));
 		model.set(k(Const.K_DIAM, t.id), t.diameterMm);
+		model.set(k(Const.K_REFPOSE, t.id), formatPose(t.refPose));
 
 		CalibParams p = t.params;
 		model.set(k(Const.K_RADIUS, t.id), p.radiusMm);
@@ -149,10 +151,13 @@ public class TcpStore {
 		model.set(k(Const.K_NAME, id), name);
 	}
 
-	public void setCalibrationResult(int id, double[] correction, double diameterMm) {
+	public void setCalibrationResult(int id, double[] correction, double diameterMm, double[] measuredPose) {
 		model.set(k(Const.K_CORR, id), formatPose(correction));
 		model.set(k(Const.K_DIAM, id), diameterMm);
 		model.set(k(Const.K_CALIBRATED, id), true);
+		if (measuredPose != null) {
+			model.set(k(Const.K_REFPOSE, id), formatPose(measuredPose));
+		}
 	}
 
 	private static double[] parsePose(String csv) {

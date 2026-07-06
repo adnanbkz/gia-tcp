@@ -20,6 +20,11 @@ import com.ur.urcap.api.domain.program.structure.TreeStructureException;
 import com.ur.urcap.api.domain.script.ScriptWriter;
 import com.ur.urcap.api.domain.undoredo.UndoRedoManager;
 import com.ur.urcap.api.domain.undoredo.UndoableChanges;
+import com.ur.urcap.api.domain.userinteraction.robot.movement.MovementCompleteEvent;
+import com.ur.urcap.api.domain.userinteraction.robot.movement.RobotMovementCallback;
+import com.ur.urcap.api.domain.value.Pose;
+import com.ur.urcap.api.domain.value.simple.Angle;
+import com.ur.urcap.api.domain.value.simple.Length;
 import com.ur.urcap.api.domain.variable.Variable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,6 +47,7 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 
 	private static final Logger logger = LogManager.getLogger(MethodHandles.lookup().lookupClass());
 
+	private final ProgramAPIProvider apiProvider;
 	private final ProgramAPI programAPI;
 	private final ProgramModel programModel;
 	private final UndoRedoManager undoRedoManager;
@@ -49,11 +55,36 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 	private final DataModel model;
 
 	public TCPCalibrationContribution(ProgramAPIProvider apiProvider, TCPCalibrationView view, DataModel model) {
+		this.apiProvider = apiProvider;
 		this.programAPI = apiProvider.getProgramAPI();
 		this.programModel = programAPI.getProgramModel();
 		this.undoRedoManager = programAPI.getUndoRedoManager();
 		this.view = view;
 		this.model = model;
+	}
+
+	/**
+	 * Opens the guarded move-robot screen targeting the selected TCP's taught centre and
+	 * runs {@code onArrived} once the robot reaches it. Backing out of the move screen
+	 * fires no callback, so callers must not lock UI state before it runs.
+	 */
+	public void requestMoveToCenter(final Runnable onArrived) {
+		GiaTcp tcp = getSelectedTcp();
+		if (tcp == null || !tcp.isCenterTaught()) {
+			return;
+		}
+		double[] c = tcp.centerPose;
+		Pose pose = programAPI.getValueFactoryProvider().getPoseFactory()
+				.createPose(c[0], c[1], c[2], c[3], c[4], c[5], Length.Unit.M, Angle.Unit.RAD);
+		apiProvider.getUserInterfaceAPI().getUserInteraction().getRobotMovement()
+				.requestUserToMoveRobot(pose, new RobotMovementCallback() {
+					@Override
+					public void onComplete(MovementCompleteEvent movementCompleteEvent) {
+						if (onArrived != null) {
+							onArrived.run();
+						}
+					}
+				});
 	}
 
 	/** Wraps every DataModel / program-tree mutation in an UndoableChanges scope (required). */
@@ -212,9 +243,10 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		edit(() -> model.set(Const.K_ACT_CUSTOM_VAR, v));
 	}
 
-	/** Symmetric +/- allowed deviation (mm) for an axis in {X,Y,Z}. */
+	/** Symmetric +/- allowed deviation (mm) for an axis in {X,Y,Z} or the diameter ("D"). */
 	public double getTol(String axis) {
-		return model.get(String.format(Const.K_TOL, axis), Const.DEF_TOL_MM);
+		return model.get(String.format(Const.K_TOL, axis),
+				"D".equals(axis) ? Const.DEF_TOL_DIAM_MM : Const.DEF_TOL_MM);
 	}
 
 	public void setTol(final String axis, final double v) {
@@ -313,35 +345,57 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		String radius = UrScript.num(p.radiusMm);
 		String overrun = UrScript.num(p.overrunDeg);
 		String zSearch = UrScript.num(p.signedSearchZMm());
-		// Immerse must move OPPOSITE to the search retract: search clears the beams, immerse
-		// advances back through them. It was hard-coded +toolZ regardless of invertZ, so once the
-		// search retracted in one direction the immerse couldn't re-occlude from the other side
-		// (on a tool whose +Z points up this left the Z search unable to finish). Tie it to invertZ.
-		String zImmerse = UrScript.num(p.invertZ ? getImmerseZ() : -getImmerseZ());
+		String zImmerse = UrScript.num(p.signedImmerseZMm(getImmerseZ()));
+		String approachZ = UrScript.num(p.signedApproachZMm(getApproachZ()) / 1000.0);
 		int adj = isAdjustAngle() ? 1 : 0;
 		boolean persist = isPersistReference();
 		// Referencing measures + stores a baseline, so it must never fail on the tolerance band.
 		String tolX = persist ? "999" : UrScript.num(getTol("X"));
 		String tolY = persist ? "999" : UrScript.num(getTol("Y"));
 		String tolZ = persist ? "999" : UrScript.num(getTol("Z"));
+		// Diameter (CAPTRON semantics): referencing stores the RAW measurement (offset 0, no
+		// band); runtime corrects the sensor bias with real - referenced and checks the band
+		// against the real diameter (or against the referenced one when no real is configured).
+		// Without a referenced baseline the bias is unknown, so the band stays disabled.
+		double diamOffMm = !persist && p.realDiameterMm > 0 && tcp.calibrated && tcp.diameterMm > 0
+				? p.realDiameterMm - tcp.diameterMm : 0.0;
+		double diamNomMm = tcp.calibrated
+				? (p.realDiameterMm > 0 ? p.realDiameterMm : tcp.diameterMm) : 0.0;
+		String tolD = persist ? "0" : UrScript.num(getTol("D"));
 
 		// Handshake line the Java CalibrationServer parses (mm + bare-CSV poses).
-		// INIT;pRef;refTcp;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm;tcpId;persist
-		String initLine = "INIT;" + UrScript.poseCsv(tcp.centerPose) + ";" + UrScript.poseCsv(refPose)
+		// INIT;pRef;refTcp;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm;tcpId;persist;tolDmm;diamNomMm;pStart
+		// pRef (correction reference) is the pose measured at referencing when there is one
+		// (CAPTRON h()); the circle still runs around the taught centre (pStart, CAPTRON j()).
+		String initLine = "INIT;" + UrScript.poseCsv(tcp.correctionRefPose()) + ";" + UrScript.poseCsv(refPose)
 				+ ";" + UrScript.num(p.radiusMm) + ";" + tolX + ";" + tolY
 				+ ";" + tolZ + ";" + adj + ";" + UrScript.num(getOffsetZ())
-				+ ";" + UrScript.num(p.maxAngleRxDeg) + ";" + UrScript.num(p.maxAngleRyDeg) + ";0"
-				+ ";" + getTcpId() + ";" + (persist ? 1 : 0);
+				+ ";" + UrScript.num(p.maxAngleRxDeg) + ";" + UrScript.num(p.maxAngleRyDeg)
+				+ ";" + UrScript.num(diamOffMm)
+				+ ";" + getTcpId() + ";" + (persist ? 1 : 0)
+				+ ";" + tolD + ";" + UrScript.num(diamNomMm)
+				+ ";" + UrScript.poseCsv(tcp.centerPose);
 
 		writer.appendLine("# --- GIA TCP (runtime calibration, maths in Java) ---");
+		// CAPTRON parity: Check/Validate must not leak the reference TCP into the rest of
+		// the program, so the previous TCP is backed up and restored at the end. Recalibrate
+		// intentionally does not restore (its point is to continue with the corrected TCP).
+		boolean restoreTcp = getAction() != Const.ACTION_RECALIBRATE;
+		if (restoreTcp) {
+			writer.appendLine("giaTcpBak = get_tcp_offset()");
+		}
 		// Probe with the reference TCP active and start above the cross for a safe approach.
 		writer.appendLine("set_tcp(" + UrScript.pose(refPose) + ")");
 		writer.appendLine("giaTcpApproach = pose_trans(" + UrScript.pose(tcp.centerPose)
-				+ ", p[0,0," + UrScript.num(getApproachZ() / 1000.0) + ",0,0,0])");
+				+ ", p[0,0," + approachZ + ",0,0,0])");
 		writer.appendLine("movel(giaTcpApproach, a=" + acc + ", v=" + vel + ")");
+		writer.appendLine("movel(" + UrScript.pose(tcp.centerPose) + ", a=" + acc + ", v=" + vel + ")");
 		writer.appendLine("tcpc__rtCalib(\"127.0.0.1\", " + CalibrationServer.PORT + ", \"" + initLine + "\", "
 				+ tcp.ioX + ", " + tcp.ioY + ", " + radius + ", " + acc + ", " + vel + ", " + overrun + ", "
 				+ zSearch + ", " + zImmerse + ")");
+		// CAPTRON parity: retract to the approach height after the action (ok or not), so the
+		// program never continues its path from between the sensor forks.
+		writer.appendLine("movel(giaTcpApproach, a=" + acc + ", v=" + vel + ")");
 
 		// Status: 0 = OK, 4 = OUT_OF_TOLERANCE (measured, but outside the band). Check accepts both
 		// (tool found); Validate/Recalibrate require an in-tolerance result.
@@ -363,6 +417,12 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 			writer.ifCondition("not giaTcpOk");
 			writer.writeChildren();
 			writer.end();
+		}
+
+		// Restore last (as CAPTRON): the If-Error children still run with the reference
+		// TCP active, which is what centre-relative recovery motion needs.
+		if (restoreTcp) {
+			writer.appendLine("set_tcp(giaTcpBak)");
 		}
 	}
 }

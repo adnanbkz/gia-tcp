@@ -392,6 +392,19 @@ public class DiagnosticsCard extends JPanel {
 		new Thread(new Runnable() {
 			@Override
 			public void run() {
+				// Injected primary program: in Local mode the controller ignores it and the
+				// test would just burn the 120 s timeout, so fail fast like the other flows.
+				if (Boolean.FALSE.equals(contribution.isInRemoteControl())) {
+					SwingUtilities.invokeLater(new Runnable() {
+						@Override
+						public void run() {
+							log.append(t.t("REF_LOCAL_MODE") + "\n");
+							log.setCaretPosition(log.getDocument().getLength());
+							repeatBtn.setEnabled(true);
+						}
+					});
+					return;
+				}
 				final RepeatabilityResult result = contribution.runRepeatability(sel, runs);
 				SwingUtilities.invokeLater(new Runnable() {
 					@Override

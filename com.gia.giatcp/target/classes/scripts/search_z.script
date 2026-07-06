@@ -14,7 +14,7 @@ thread gia__movelThread():
 end
 
 #######################################
-# Search Z
+# Search Z: retract until the beams clear, then immerse back until both are blocked.
 def gia__searchZ(intersect, in1, in2, zSearch, zImmerse, acc, vel, debugLvl):
   gia__movelPos = pose_trans(intersect, p[0,0,-(zSearch/1000),0,0,0])
   gia__movelAcc = acc

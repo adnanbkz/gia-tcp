@@ -50,7 +50,8 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 
 	private final ViewAPIProvider viewApiProvider;
 
-	private static final String[] TOL_AXES = { "X", "Y", "Z" };
+	/** Tolerance rows: X/Y/Z axes plus the probed tool diameter ("D", shown as Ø). */
+	private static final String[] TOL_AXES = { "X", "Y", "Z", "D" };
 
 	private final JComboBox<String> tcpCombo = new JComboBox<String>();
 	private final JRadioButton rCheck = new JRadioButton();
@@ -65,7 +66,8 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 	private final JRadioButton rAngle = new JRadioButton();
 	private final JTextField fOffZ = new JTextField(8);
 
-	private final JTextField[] tolField = { new JTextField(8), new JTextField(8), new JTextField(8) };
+	private final JTextField[] tolField = {
+			new JTextField(8), new JTextField(8), new JTextField(8), new JTextField(8) };
 
 	private final JRadioButton rDefaultVar = new JRadioButton();
 	private final JRadioButton rCustomVar = new JRadioButton();
@@ -180,7 +182,11 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		content.add(south, BorderLayout.SOUTH);
 	}
 
-	/** Runs a live calibration off the EDT (resolve TCP on the EDT, calibrate on a worker). */
+	/**
+	 * Live calibration from the node, mirroring the installation test flow (and CAPTRON):
+	 * check Remote Control, activate the reference TCP, guide the robot to the taught
+	 * centre with the guarded move screen, and only then inject the probe motions.
+	 */
 	private void runLiveCalibration() {
 		final TCPCalibrationContribution c = provider.get();
 		String issue = c.readinessIssueKey();
@@ -196,6 +202,28 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		}
 		calibrateNow.setEnabled(false);
 		new Thread(() -> {
+			if (Boolean.FALSE.equals(inst.isInRemoteControl())) {
+				SwingUtilities.invokeLater(() -> {
+					calibrateNow.setEnabled(true);
+					JOptionPane.showMessageDialog(calibrateNow, t.t("REF_LOCAL_MODE"),
+							t.t("BTN_CALIBRATE_TEST"), JOptionPane.WARNING_MESSAGE);
+				});
+				return;
+			}
+			inst.activateReferenceTcp(tcp);
+			SwingUtilities.invokeLater(() -> {
+				// Re-enable before the move screen: backing out of it fires no callback,
+				// so the button must stay usable for a retry.
+				calibrateNow.setEnabled(true);
+				c.requestMoveToCenter(() -> startNodeProbe(inst, tcp));
+			});
+		}, "gia-tcp-node-calibrate").start();
+	}
+
+	/** Runs the actual probe once the robot sits at the taught centre. */
+	private void startNodeProbe(final InstallationContribution inst, final GiaTcp tcp) {
+		calibrateNow.setEnabled(false);
+		new Thread(() -> {
 			TCPCalibrationResult r;
 			try {
 				r = inst.runTestCalibration(tcp);
@@ -207,7 +235,7 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 				calibrateNow.setEnabled(true);
 				showResult(res);
 			});
-		}, "gia-tcp-node-calibrate").start();
+		}, "gia-tcp-node-probe").start();
 	}
 
 	private void showResult(TCPCalibrationResult r) {
@@ -287,7 +315,7 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 			gc.gridy = i;
 			gc.weightx = 0;
 			gc.fill = GridBagConstraints.NONE;
-			box.add(Ui.bold(axis), gc);
+			box.add(Ui.bold("D".equals(axis) ? "Ø" : axis), gc);
 			gc.gridx = 1;
 			gc.weightx = 1;
 			gc.fill = GridBagConstraints.HORIZONTAL;

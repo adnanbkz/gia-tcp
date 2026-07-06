@@ -1,7 +1,7 @@
 # GIA TCP Calibrator — Contexto y estado actual
 
 > Documento de contexto/handoff. Resume lo importante del proyecto y el punto exacto en el
-> que estamos. Última actualización: 2026-06-17.
+> que estamos. Última actualización: 2026-07-02.
 
 ---
 
@@ -80,9 +80,10 @@ se borra); nodo de programa nuevo + `TCPCalibrationMaths` compartido con la inst
 
 ### Comunicación + orquestación (Fase 3) ✅
 - **`util/comms/SecondaryScriptSender.java`** — envía al puerto **30002** (como CAPTRON).
-- **`tcpcalibration/TCPCalibrationRunner.java`** — abre `ServerSocket` en **5511**, manda
-  `lib + call` por secondary, parsea las poses crudas y llama a `TCPCalibrationMaths` para TODO el
-  cálculo (computeCenter → searchZ → correction → orientación opcional).
+- **`tcpcalibration/TCPCalibrationRunner.java`** — secuencia común del stack nuevo. En live usa
+  `SecondaryProbeTransport` con retorno **5511**; en runtime usa `ServerProbeTransport` contra el
+  servidor **5512**. Parsea poses crudas y llama a `TCPCalibrationMaths` para TODO el cálculo
+  (computeCenter → searchZ → correction → orientación opcional).
 - **`TCPCalibrationSpec.java`** (entrada) / **`TCPCalibrationResult.java`** (salida, status
   OK / NO_ROBOT_REPLY / NO_INTERSECT / SEARCH_Z_FAILED / OUT_OF_TOLERANCE /
   ORIENTATION_NOT_POSSIBLE).
@@ -112,40 +113,132 @@ se borra); nodo de programa nuevo + `TCPCalibrationMaths` compartido con la inst
 
 **Build:** `mvn -o clean package install -Pursim` · ursim.home =
 `/opt/ursim-proves/ursim-5.22.0.1214828` · jar → `${ursim}/.urcaps/com.GIA.GIATcp.jar`.
-Estado: **BUILD SUCCESS (40 fuentes), 12 tests verdes, jar desplegado (jun 16)**.
+Estado histórico: **BUILD SUCCESS**; validar de nuevo tras cada cambio con `mvn test`.
 
 ---
 
-## 5. LOS DOS modelos — CONFIRMADO e IMPLEMENTADO (2026-06-17) ✅
+## 5. Estado real de modelos y Z (actualizado 2026-06-30)
 
-Se lanza **desde el botón "Calibrar test" de la instalación** (en vivo) Y **en runtime desde el nodo**.
+Hay **dos caminos nuevos Java** y **dos caminos legacy aún activos**:
 
-- **Modelo 1 — En vivo (HECHO):** botón "Calibrar test" en el Overview de la instalación →
-  `InstallationContribution.runTestCalibration` → `TCPCalibrationRunner` por secondary (30002) →
-  muestra OK/Error + el TCP corregido y guarda la corrección en el store.
-- **Modelo 2 — Runtime (HECHO):** el nodo calibra dentro del programa en ejecución vía el
-  **`CalibrationServer`** (puerto 5512, arrancado en `Activator`, vivo mientras PolyScope está arriba).
-  `generateScript` emite `tcpc__rtCalib(...)`: el robot hace los `moveC` + captura poses, las manda al
-  servidor Java por una conexión persistente, el servidor hace toda la geometría con
-  `TCPCalibrationMaths` y devuelve el TCP corregido, que el robot aplica con `set_tcp` / asigna a
-  variable. Reutiliza el mismo math + `tcpcalib.script`.
+- **Live nuevo:** botón **"Calibrar (test)"** en Overview →
+  `InstallationContribution.runTestCalibration` → `TCPCalibrationRunner` + `SecondaryProbeTransport`
+  por secondary **30002** → retorno **5511** → Java calcula y guarda la corrección.
+- **Runtime nuevo:** nodo **"GIA TCP"** → `generateScript` emite `tcpc__rtCalib(...)` → robot mueve y
+  captura poses → `CalibrationServer` en **5512** calcula con `TCPCalibrationMaths` → devuelve TCP
+  corregido para asignar/aplicar.
+- **Legacy activo:** botón **"Iniciar referenciado"** del wizard → `CalibrationController` → primary
+  **30001** + scripts `gia_tcp_*` → retorno **5510**.
+- **Legacy activo:** Diagnostics → Repeatability test → `RepeatabilityController` → primary **30001** +
+  scripts `gia_tcp_*` → retorno **5510**.
 
-**Arquitectura compartida:** la secuencia `calibrate()` vive en un solo sitio detrás de
-`ProbeTransport`; `SecondaryProbeTransport` (live) y `ServerProbeTransport` (runtime) solo cambian el
-transporte. Toda la geometría sigue en `TCPCalibrationMaths` (Java puro, reusable Estun).
+**Arquitectura objetivo:** el cálculo portable vive en `TCPCalibrationMaths` y la secuencia común en
+`TCPCalibrationRunner` detrás de `ProbeTransport`. Los caminos legacy se mantienen porque aún dan
+servicio al wizard/repetibilidad, pero no son el modelo objetivo para Estun.
 
-**Paridad completa en el nodo "GIA TCP"** (nodo nuevo, stack limpio): acciones Check/Validate/
-Recalibrate, pestañas Básico/Tolerancias/Asignación, asignación a variable, manejo de errores con
-hijo **If-Error** (reutiliza `ProgErrHandlingService`). El nodo viejo `ProgTcpAction` sigue desactivado.
+**Z corregida:** los campos de UI son magnitudes positivas. `CalibParams` calcula el signo:
+`signedApproachZMm()` va por el lado de retracción segura, `signedSearchZMm()` define la retracción
+de búsqueda y `signedImmerseZMm()` vuelve en sentido contrario para recortar los haces. Se replica la
+convención CAPTRON: default `invertZ=false`; con montaje top-down y `+Z` de herramienta hacia abajo,
+Approach/Search van en `-toolZ` e Immerse va en `+toolZ`. Activar `invertZ` invierte esos sentidos.
 
-**Pendientes menores (no bloqueantes):** Check re-mide completo (no el immerse-only ligero de
-CAPTRON); la tolerancia de diámetro no se aplica en el stack nuevo (`withinTol` solo XYZ).
+**Nodo "GIA TCP" activo:** Check/Validate/Recalibrate, pestañas Básico/Tolerancias/Asignación,
+asignación a variable, manejo de errores con hijo **If-Error**. El nodo viejo `ProgTcpAction` sigue
+desactivado en `Activator`.
 
-### Gaps históricos respecto al nodo viejo (ya cubiertos salvo lo de arriba)
-El nodo nuevo cubre: selección de TCP, calibración XYZ (≈ Recalibrate), corrección de orientación,
-tolerancias X/Y/Z. Le **falta**: acción TCP Check, acción TCP Validate, asignación a variable de
-programa, bloque If-Error, tolerancia de diámetro. La diferencia de fondo es el **modelo de
-ejecución** (nuevo = en vivo; viejo = runtime con todas las acciones).
+### Endurecimiento del flujo live + diámetro (2026-07-02, paridad CAPTRON verificada contra el decompilado)
+
+- **`set_tcp(refTcp)` en cada programa live inyectado** (`SecondaryProbeTransport`): antes las poses
+  se capturaban con el TCP que estuviera activo → corrección silenciosamente desplazada. CAPTRON
+  antepone `set_tcp` a todos sus programas (factoría `D.A` del decompilado).
+- **"Calibrar (test)" ahora es guiado** (Overview y botón del nodo): check de Remote Control (el
+  botón del nodo no lo tenía) → `set_tcp(ref)` por secondary → pantalla de mover-robot al centro
+  enseñado → al llegar, sondeo. Sin movel ciego desde parking. Si el usuario cancela la pantalla de
+  movimiento no hay callback (API UR sin evento de cancelación), por eso el botón se rehabilita
+  ANTES de abrirla.
+- **`Fijar centro` valida el TCP activo**: rechaza la pose si no se enseñó con el TCP de referencia
+  (CAPTRON: "Can't teach center pose, wrong TCP"). Clave `WIZ_CENTER_WRONG_TCP`.
+- **Repetibilidad** comprueba Remote Control antes de inyectar (fail-fast en Local, como el resto).
+- **Diámetro (semántica CAPTRON):** el referenciado guarda la medida CRUDA (diamOffset 0 en
+  `CalibrationController`/`RepeatabilityController`; antes pasaban `realDiameterMm` como offset, lo
+  que sumaba la boquilla entera al medido). En runtime el INIT manda `diamOff = real − referenciado`
+  (0 si falta alguno o si es referenciado) + banda de tolerancia Ø: campos opcionales 15/16 del INIT
+  (`tolDmm;diamNomMm`), fila Ø en la pestaña Tolerancias (`K_TOL` "D", default
+  `DEF_TOL_DIAM_MM = 2.0`), check en `TCPCalibrationRunner` con `withinTolVal` → OUT_OF_TOLERANCE.
+  Nominal = diámetro real configurado, o el referenciado si no hay real. También corregido en el
+  nodo legacy desactivado.
+- **Check/Validate restauran el TCP del programa** (`giaTcpBak = get_tcp_offset()` → acción →
+  `set_tcp(giaTcpBak)` al final, tras el hijo If-Error): antes el nodo dejaba el TCP de referencia
+  activo y el resto del programa seguía con un TCP cambiado en silencio. Recalibrate no restaura,
+  igual que CAPTRON (su objetivo es continuar con el TCP corregido).
+- **Recorrido recortado (queja del usuario: "se expande demasiado")**: defaults redimensionados
+  para sondear la PUNTA DEL HILO — radio 10→**6 mm** (Ø12), Search Z 12→**8**, Approach Z 50→**30**;
+  overrun se queda en 10° (debe superar el semiarco bloqueado en el arranque: ~10° con hilo y radio 6).
+  Regla física del radio mínimo (documentada en Const/README/montaje): ambos haces deben quedar
+  LIBRES a la vez para armar la captura → radio > (radio útil + medio haz + margen)/sen 45°; con
+  BOQUILLA Ø16–20 hacen falta ≥13–16 mm (por eso NO se puede bajar el radio si se sondea boquilla).
+  Además, eliminado el `movel(pStart)` de vuelta al centro tras el círculo (herencia CAPTRON
+  redundante: la búsqueda Z ya va por su cuenta al centro calculado). OJO: los TCPs y nodos ya
+  guardados conservan sus valores; los defaults nuevos solo aplican a TCPs/nodos nuevos.
+
+### Referencia de pose medida — CAPTRON h()/j() (2026-07-03)
+
+- **El referenciado guarda la pose MEDIDA (`pSearchZ`) como `GiaTcp.refPose`** (clave `K_REFPOSE`,
+  resultado ampliado con `measuredPose`, sink/`setCalibrationResult` con 4º parámetro; el camino
+  legacy del wizard la reconstruye con `pRef · inv(traslación de la corrección)`).
+- **El runtime corrige contra `refPose`, no contra el centro enseñado**: `correctionRefPose()` =
+  refPose si `calibrated && hasRefPose()`, si no centerPose (compat con instalaciones viejas y
+  primer referenciado). Es el `h()` de CAPTRON: tras el primer referenciado, el error humano del
+  teach desaparece del lazo de medida.
+- **El círculo sigue arrancando en el centro enseñado** (`TCPCalibrationSpec.pStart`, el `j()` de
+  CAPTRON; fallback a pRef si falta). El runner separa ambos: sondeo/`computeCenter` con pStart,
+  corrección con pRef. INIT amplía cola opcional: campo 17 = `pStartCsv`.
+- **Re-enseñar el centro invalida la referencia** (`teachCenter` → `calibrated=false`, refPose a
+  cero), como CAPTRON al fijar `j()`: obliga a re-referenciar.
+- La corrección mostrada en Overview pasa a significar "deriva desde el referenciado".
+
+### Revisión "entorno real" contra el manual oficial CAPTRON 1.3.0 (2026-07-03)
+
+Manual: https://www.captron.com/fileadmin/user_upload/data/landingpage/Software_UR/Reference_Manual_URCap_CAPTRON_TCP_en_1.3.0_1.pdf
+Confirmaciones clave del manual: el centro se enseña con AMBOS haces cortados y solo **1–2 mm**
+de inmersión (troubleshooting nº 9); el overrun se ajusta si el círculo termina dentro de un haz;
+"exactly 2 times" por barrera (nº 2, remedio: subir velocidad); tolerancias min/max (no ±);
+error handling con "Try again x times"; el nodo tiene Move Start/Move Approach.
+
+Arreglos aplicados:
+- **Stop del Overview no paraba el test live**: solo llamaba al stop del stack legacy (30001).
+  Ahora también manda un programa `def` con `stopl(2.0)` por secondary (preempta el programa de
+  sondeo, como el Stop de CAPTRON) + línea "STOP" al puerto 5511 para desbloquear el read de
+  `SecondaryProbeTransport` al instante (`sendStop`). Listener en hilo propio (socket I/O).
+- **El test re-baseaba la referencia en cada clic**: `runTestCalibration` solo escribe `refPose`
+  si no existe (bootstrap tras enseñar centro); corrección+diámetro se guardan siempre (como el
+  Calibrate manual de CAPTRON, que guarda diámetro/corrección pero solo el wizard fija h()).
+  Sin esto, la deriva medida se auto-borraba: dos tests seguidos siempre daban ~0.
+- **`CircleData.valid()` endurecido a exactamente 4 flancos por haz** (antes aceptaba 6/8 pares:
+  chatter del sensor emparejaba flancos de rebote y desplazaba el centro EN SILENCIO).
+- **Guard CAPTRON "input low on intersect position"** en `tcpc__searchZMsg`: al llegar al centro
+  calculado ambos haces deben estar cortados; si no (teach a profundidad errónea, herramienta
+  rota, polaridad), aborta con Z;FAIL en vez de buscar desde un punto sin sentido.
+- **El nodo se retira a la altura de aproximación al acabar la acción** (ok o fallo), como el
+  move-back del nodo CAPTRON: el programa nunca continúa su trayectoria desde dentro de la
+  horquilla (`movel(giaTcpApproach)` tras `tcpc__rtCalib`, antes del set_tcp de restauración).
+- Docs: guía oficial de teach 1–2 mm añadida a montaje/WIKI/README.
+
+### Recolocación final de la punta (2026-07-03)
+
+- **Al terminar la búsqueda Z, la punta se recoloca entre los haces** (`tcpc__searchZMsg`):
+  la retracción captura la pose del flanco de LIBERACIÓN (ambos haces libres) y, tras el flanco
+  de corte de la inmersión, un `movel(interpolate_pose(corte, liberación, 0.5))` sube la punta
+  al punto medio entre ambos flancos. Antes la secuencia se quedaba parada en el flanco de corte
+  (punta clavada en el haz inferior). CAPTRON logra lo mismo con la recolocación final de su flujo
+  live (`set_tcp(nuevo)` + `movel(poseRef)`, `tcp/inst/A.java:560`); el punto medio además cubre
+  horquillas no coplanarias. La pose MEDIDA que se devuelve a Java sigue siendo el flanco de corte:
+  la corrección Z no cambia. Aplica a test live y al nodo runtime (misma primitiva).
+
+**Pendientes menores:** Check re-mide completo (no el immerse-only ligero de CAPTRON); queda por
+decidir si migrar wizard y repetibilidad al stack nuevo; el ajuste RX/RY del stack nuevo es
+single-shot (los parámetros `iterator`/`accuracyDeg` del wizard solo los usa el stack legacy —
+la iteración con re-centrado queda para cuando se valide XYZ en hardware).
 
 ---
 

@@ -6,9 +6,11 @@ com/GIA/GIATcp/program/errhandling/ProgErrHandlingView.class
 com/GIA/GIATcp/util/Ui$3.class
 com/GIA/GIATcp/installation/diagnostics/DiagnosticsCard$3.class
 com/GIA/GIATcp/program/action/ProgTcpActionView.class
+com/GIA/GIATcp/installation/diagnostics/DiagnosticsCard$2$2.class
 com/GIA/GIATcp/installation/InstallationContribution.class
 com/GIA/GIATcp/installation/InstallationContribution$2.class
 com/GIA/GIATcp/installation/overview/OverviewCard$1.class
+com/GIA/GIATcp/tcpcalibration/TCPCalibrationContribution$3.class
 com/GIA/GIATcp/util/ScriptResource.class
 com/GIA/GIATcp/installation/model/GiaTcp.class
 com/GIA/GIATcp/util/ScriptResourceLoader.class
@@ -24,6 +26,7 @@ com/GIA/GIATcp/installation/model/IoOption.class
 com/GIA/GIATcp/program/errhandling/ProgErrHandlingContribution.class
 com/GIA/GIATcp/installation/wizard/SetupWizard$1$1.class
 com/GIA/GIATcp/tcpcalibration/model/CircleData.class
+com/GIA/GIATcp/installation/overview/OverviewCard$5.class
 com/GIA/GIATcp/installation/InstallationContribution$3.class
 com/GIA/GIATcp/tcpcalibration/math/TCPCalibrationMaths.class
 com/GIA/GIATcp/tcpcalibration/probe/CalibrationServer.class
@@ -36,6 +39,7 @@ com/GIA/GIATcp/tcpcalibration/probe/SecondaryProbeTransport.class
 com/GIA/GIATcp/tcpcalibration/math/TCPCalibrationMaths$CenterResult.class
 com/GIA/GIATcp/program/action/ProgTcpActionContribution$2.class
 com/GIA/GIATcp/tcpcalibration/model/TCPCalibrationSpec.class
+com/GIA/GIATcp/installation/overview/OverviewCard$4$1.class
 com/GIA/GIATcp/util/comms/SecondaryScriptSender.class
 com/GIA/GIATcp/util/Const.class
 com/GIA/GIATcp/program/errhandling/ProgErrHandlingService.class
@@ -70,6 +74,7 @@ com/GIA/GIATcp/util/Ui$1$1.class
 com/GIA/GIATcp/installation/overview/OverviewCard$2.class
 com/GIA/GIATcp/tcpcalibration/TCPCalibrationContribution$1.class
 com/GIA/GIATcp/util/Ui$2.class
+com/GIA/GIATcp/installation/overview/OverviewCard$3$2$1.class
 com/GIA/GIATcp/installation/diagnostics/DiagnosticsCard$1.class
 com/GIA/GIATcp/tcpcalibration/TCPCalibrationView$1.class
 com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunner.class

@@ -267,7 +267,7 @@ public class ProgTcpActionContribution implements ProgramNodeContribution {
 		int id = tcp.id;
 		String refTcp = UrScript.pose(refPose);
 		String center = UrScript.pose(tcp.centerPose);
-		String immerseZ = UrScript.num(getImmerseZ());
+		String immerseZ = UrScript.num(p.signedImmerseZMm(getImmerseZ()));
 		// Symmetric band: each axis passes when its deviation is within +/- the tolerance.
 		String tolMin = String.format(Locale.US, "[%s,%s,%s,%s]",
 				mm2m(-getTol("X")), mm2m(-getTol("Y")), mm2m(-getTol("Z")), mm2m(-getTol("D")));
@@ -314,15 +314,20 @@ public class ProgTcpActionContribution implements ProgramNodeContribution {
 	private void emitCalibMotion(ScriptWriter writer, GiaTcp tcp, int id, String refTcp, String center,
 			String acc, String vel, String immerseZ, String tolMin, String tolMax) {
 		CalibParams p = tcp.params;
+		String approachZ = UrScript.num(p.signedApproachZMm(getApproachZ()) / 1000.0);
 		writer.appendLine("gia_tcp_initCalib(" + id + ")");
 		writer.appendLine("set_tcp(" + refTcp + ")");
 		writer.appendLine("gia__aRef = " + center);
-		writer.appendLine("gia__aStart = pose_trans(gia__aRef, p[0,0," + UrScript.num(getApproachZ() / 1000.0) + ",0,0,0])");
+		writer.appendLine("gia__aStart = pose_trans(gia__aRef, p[0,0," + approachZ + ",0,0,0])");
 		writer.appendLine("movel(gia__aStart, a=" + acc + ", v=" + vel + ")");
+		writer.appendLine("movel(gia__aRef, a=" + acc + ", v=" + vel + ")");
+		// Runtime diameter offset (CAPTRON): real - referenced measured, only once both exist.
+		double diamOffMm = p.realDiameterMm > 0 && tcp.calibrated && tcp.diameterMm > 0
+				? p.realDiameterMm - tcp.diameterMm : 0.0;
 		writer.appendLine("gia_tcp_calibXYZ(" + id + ", " + refTcp + ", gia__aRef, gia__aStart, "
 				+ tcp.ioX + ", " + tcp.ioY + ", " + UrScript.num(p.radiusMm) + ", " + acc + ", " + vel + ", "
 				+ UrScript.num(p.overrunDeg) + ", " + UrScript.num(p.signedSearchZMm()) + ", " + immerseZ + ", "
-				+ UrScript.num(p.realDiameterMm) + ", " + tolMin + ", " + tolMax + ")");
+				+ UrScript.num(diamOffMm) + ", " + tolMin + ", " + tolMax + ")");
 		if (isAdjustAngle()) {
 			// Degrees: gia__adjustAngleXY applies d2r() internally (same convention as accuracy).
 			String maxAngle = String.format(Locale.US, "[%.4f,%.4f]", p.maxAngleRxDeg, p.maxAngleRyDeg);

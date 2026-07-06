@@ -41,6 +41,7 @@ public final class Const {
 	public static final String K_CALIBRATED = "t%d.calibd";  // boolean
 	public static final String K_CORR = "t%d.corr";          // pose csv (SI: m, rad)
 	public static final String K_DIAM = "t%d.diam";          // double mm
+	public static final String K_REFPOSE = "t%d.refpose";    // pose csv (SI): pose measured at referencing (CAPTRON h())
 	// params
 	public static final String K_RADIUS = "t%d.radius";
 	public static final String K_SPEED = "t%d.speed";
@@ -57,13 +58,19 @@ public final class Const {
 	public static final String K_MAXRY = "t%d.maxry";
 
 	// ----- Default calibration parameters (tuned for top-down: torch pointing down into a
-	//        calibrator below, 2 crossed FGL50 light barriers, ~Ø30 mm clear aperture) -----
-	public static final double DEF_RADIUS_MM = 10.0;     // Ø20 probe circle -> ~5 mm clearance in a Ø30 aperture
+	//        calibrator below, 2 crossed FGL50 light barriers, probing the WIRE tip) -----
+	// Radius floor: to arm the edge capture both beams must be FREE at the same time, and on
+	// the circle that only happens near the 45 deg bisectors -> radius > (tool radius + beam
+	// half-width + teach margin) / sin(45). Wire Ø~1.2 -> 6 mm is comfortable. Probing a
+	// Ø16-20 NOZZLE instead needs radius >= ~13-16 mm: raise it per-TCP in the wizard.
+	public static final double DEF_RADIUS_MM = 6.0;      // Ø12 probe circle (wire tip); ~half the lap of the old Ø20
 	public static final double DEF_SPEED_MM_S = 30.0;    // gentle base; node Speed = Slow/Normal/Fast scales it
 	public static final double DEF_ACCEL_MM_S2 = 100.0;
+	// Must exceed the blocked-arc half-angle at the circle start (~asin(half occlusion/radius)):
+	// wire on a 6 mm radius is ~10 deg, so do NOT lower this together with small radii.
 	public static final double DEF_OVERRUN_DEG = 10.0;
-	public static final double DEF_SEARCHZ_MM = 12.0;    // retract stroke to clear the beams (limits travel into the fixture)
-	public static final boolean DEF_INVERTZ = true;      // tool +Z down -> search retracts UP to clear, immerse advances DOWN
+	public static final double DEF_SEARCHZ_MM = 8.0;     // retract stroke to clear the beams (> coplanarity + beam + stop latency)
+	public static final boolean DEF_INVERTZ = false;     // CAPTRON default: search uses -toolZ, immerse uses +toolZ
 	public static final double DEF_REALDIAM_MM = 0.0;
 	public static final boolean DEF_ADJANGLE = false;
 	public static final int DEF_ITER = 1;
@@ -95,9 +102,11 @@ public final class Const {
 	public static final int ACTION_VALIDATE = 1;
 	public static final int ACTION_RECALIBRATE = 2;
 
-	public static final double DEF_APPROACHZ_MM = 50.0;  // start 50 mm above the cross (safe approach from above)
+	public static final double DEF_APPROACHZ_MM = 30.0;  // start 30 mm above the cross (safe approach from above)
 	public static final double DEF_IMMERSEZ_MM = 5.0;    // advance up to 5 mm past the taught centre to re-find the beam plane
 	public static final double DEF_TOL_MM = 1.0; // default +/- allowed deviation per axis
+	// Diameter is measured from only 4 chords, so its noise is larger than the axis noise.
+	public static final double DEF_TOL_DIAM_MM = 2.0; // default +/- allowed diameter deviation
 
 	// ----- Error-handling child node keys -----
 	public static final String K_ERR_RETRY_ENABLED = "errRetryEnabled"; // boolean

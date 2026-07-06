@@ -13,9 +13,11 @@ public interface CalibrationResultSink {
 	 * Stores a successful calibration for a TCP slot. Called from a background (server)
 	 * thread; the implementation must marshal any UI/DataModel access to the EDT.
 	 *
-	 * @param tcpId        1-based TCP slot id
-	 * @param correctionSi correction pose [x,y,z,rx,ry,rz] in SI (m, rad)
-	 * @param diameterMm   measured tool diameter (mm)
+	 * @param tcpId          1-based TCP slot id
+	 * @param correctionSi   correction pose [x,y,z,rx,ry,rz] in SI (m, rad)
+	 * @param diameterMm     measured tool diameter (mm)
+	 * @param measuredPoseSi measured beam-plane pose (SI, base frame) to keep as the
+	 *                       reference pose (CAPTRON h()); may be null (kept as-is then)
 	 */
-	void storeCalibration(int tcpId, double[] correctionSi, double diameterMm);
+	void storeCalibration(int tcpId, double[] correctionSi, double diameterMm, double[] measuredPoseSi);
 }

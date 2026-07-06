@@ -16,12 +16,16 @@ public final class TCPCalibrationResult {
 	public final double[] correctedTcp; // SI, null unless OK/OUT_OF_TOLERANCE
 	public final double[] correction;   // SI [x,y,z,rx,ry,rz], null unless computed
 	public final double diameterMm;
+	/** Measured beam-plane pose (base frame, SI), null unless measured. Referencing stores it as the reference pose. */
+	public final double[] measuredPose;
 
-	public TCPCalibrationResult(Status status, double[] correctedTcp, double[] correction, double diameterMm) {
+	public TCPCalibrationResult(Status status, double[] correctedTcp, double[] correction, double diameterMm,
+			double[] measuredPose) {
 		this.status = status;
 		this.correctedTcp = correctedTcp;
 		this.correction = correction;
 		this.diameterMm = diameterMm;
+		this.measuredPose = measuredPose;
 	}
 
 	public boolean isOk() {
@@ -29,6 +33,6 @@ public final class TCPCalibrationResult {
 	}
 
 	public static TCPCalibrationResult error(Status status) {
-		return new TCPCalibrationResult(status, null, null, 0);
+		return new TCPCalibrationResult(status, null, null, 0, null);
 	}
 }

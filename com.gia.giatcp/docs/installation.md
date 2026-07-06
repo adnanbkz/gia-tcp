@@ -83,10 +83,19 @@ En `<properties>` del `pom.xml`:
 
 ## Referenciado / calibración en robot real (importante)
 
-El botón **Iniciar referenciado** (wizard) y **Calibrar (test)** (Overview) inyectan el
-programa por el interface **primary/secondary** (30001/30002). En e-Series, con el robot en
-modo **Local** el controlador **ignora** ese script: el brazo no se mueve y la operación
-acaba en timeout. **Requisitos:**
+Hay dos caminos live desde la instalación:
+
+- **Calibrar (test)** usa el stack nuevo con secuencia guiada (paridad CAPTRON): comprueba Remote
+  Control, activa el TCP de referencia (`set_tcp` por secondary), abre la pantalla de mover-robot
+  hasta el centro enseñado y, al llegar, envía `tcpcalib.script` por **secondary 30002** (cada
+  programa inyectado empieza con `set_tcp(refTcp)`), recibe poses crudas en `127.0.0.1:5511` y
+  calcula en Java. El mismo flujo está disponible desde el botón del nodo de programa.
+- **Iniciar referenciado** del wizard y **Repeatability test** siguen usando el stack legacy por
+  **primary 30001** y retorno `127.0.0.1:5510`; ambos comprueban Remote Control antes de inyectar.
+
+En e-Series, cualquier script inyectado desde fuera necesita **Remote Control**. En modo **Local**
+el controlador ignora el script: el brazo no se mueve y la operación acaba en timeout o se avisa
+antes si el Dashboard responde. **Requisitos:**
 
 - **Remote Control activado** (menú arriba a la derecha en PolyScope). La URCap ahora consulta
   el Dashboard (`is in remote control`, puerto 29999) antes de lanzar; si estás en Local, avisa
@@ -107,7 +116,7 @@ Como el botón de instalación inyecta script (necesita Remote Control), para re
    Enseñar el centro usa el diálogo de mover-robot, que ya es manual/Local.
 2. En un programa, añade el nodo **GIA TCP**, selecciona el TCP y marca
    **"Guardar como referencia de instalación"**.
-3. **Play.** El robot baja al centro, hace el círculo de sondeo + búsqueda Z y, al terminar,
+3. **Play.** El robot aproxima desde el lado seguro, hace el círculo de sondeo + búsqueda Z y, al terminar,
    la URCap **guarda la corrección en la instalación** (igual que el botón de referenciado,
    pero sin Remote Control). El badge/lectura del Overview se actualizan solos.
 
@@ -128,4 +137,5 @@ Tras instalar, comprobar en PolyScope que aparece el nodo de instalación **GIA 
 de programa de calibración. Puertos loopback usados dentro del controlador:
 
 - `127.0.0.1:5512` — servidor de calibración runtime del **nodo de programa** (`CalibrationServer.PORT`).
-- `127.0.0.1:5510` — retorno de la calibración lanzada desde **Installation** (`Const.CALIB_RETURN_PORT`).
+- `127.0.0.1:5511` — retorno de `Calibrar (test)` con el stack Java nuevo (`SecondaryProbeTransport`).
+- `127.0.0.1:5510` — retorno legacy de `Iniciar referenciado` y repetibilidad (`Const.CALIB_RETURN_PORT`).

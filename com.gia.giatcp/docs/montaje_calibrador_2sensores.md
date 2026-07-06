@@ -28,8 +28,9 @@ y **cruzándose** en el centro de la zona de calibración. El útil entra **vert
             arm B (receptor)
 
    · El útil baja vertical (Z- del robot) por el centro de la cruz.
-   · La URCap hace un círculo de Ø30 mm (radio 15 mm por defecto)
-     alrededor del centro enseñado; ese círculo debe cruzar AMBOS haces.
+   · La URCap hace un círculo de Ø12 mm (radio 6 mm por defecto, dimensionado
+     para sondear la punta del hilo) alrededor del centro enseñado; ese
+     círculo debe cruzar AMBOS haces.
 ```
 
 Requisitos:
@@ -40,15 +41,22 @@ Requisitos:
 2. **Perpendiculares (~90°)** entre sí. No tiene que ser exacto, pero cuanto más cerca de 90°, mejor
    condicionada queda la intersección de las dos líneas.
 3. **Cruce centrado** en la zona de trabajo. El punto donde se cruzan los dos haces es la referencia;
-   ahí se enseña el "centro" en la URCap.
-4. **Apertura libre para el círculo de sondeo.** El útil describe un círculo de **Ø30 mm** (radio 15 mm
-   por defecto). El envolvente real = Ø círculo + Ø boquilla. Con boquilla de ~16–20 mm el envolvente
-   ronda **46–50 mm**. La horquilla FGL **50** da ~50 mm → **justo**. **A verificar:** diámetro real de
-   la boquilla/punta; si queda apretado, o se bajan los brazos para no chocar, o se reduce el radio de
-   sondeo a 10 mm en la URCap.
-5. **Hueco vertical bajo el plano de los haces.** La búsqueda de Z baja el útil a través del plano
-   (searchZ ≈ 20 mm por defecto). Tiene que haber **≥ 25–30 mm libres por debajo** del plano de los
-   haces, sin estructura ni brazos de la horquilla, para que la punta pueda bajar sin colisión.
+   ahí se enseña el "centro" en la URCap. **Profundidad del teach (guía oficial CAPTRON):** el centro
+   se enseña con AMBOS haces cortados y con la punta inmersa solo **1–2 mm** por debajo del plano de
+   haces — no más profundo. Con más inmersión, la retracción del Search Z tarda más en liberar y el
+   sistema pierde margen; con menos, el círculo puede no cortar los haces.
+4. **Apertura libre para el círculo de sondeo.** El útil describe un círculo de **Ø12 mm** (radio 6 mm
+   por defecto, para sondear la **punta del hilo**). El envolvente real = Ø círculo + Ø boquilla. Con
+   boquilla de ~16–20 mm el envolvente ronda **28–32 mm**, holgado en la ventana de la horquilla FGL 50.
+   **Regla del radio mínimo:** para que la captura de flancos se arme, ambos haces deben quedar libres
+   a la vez, y sobre el círculo eso solo ocurre cerca de las bisectrices → radio > (radio del útil +
+   medio ancho de haz + margen) / sen 45°. Si lo que corta los haces es la **boquilla** (Ø16–20) en vez
+   del hilo, el radio debe subirse a **≥ 13–16 mm** en la URCap (y el envolvente crece en consecuencia).
+5. **Hueco vertical en ambos lados del plano de los haces.** La lógica actual trata los campos como
+   distancias positivas y firma el movimiento según `invertZ`, siguiendo CAPTRON: la aproximación y la búsqueda Z van por
+   el lado seguro de retracción, y la inmersión vuelve en sentido contrario. Por defecto: Approach Z
+   **30 mm**, Search Z **8 mm**, Immerse Z **5 mm**. Debe haber espacio libre para esos recorridos,
+   sin estructura ni brazos de la horquilla en la trayectoria de la punta.
 6. **Rigidez.** El conjunto montado **rígido y sin flexión** sobre estructura fija de la célula. La
    repetibilidad de la calibración depende directamente de esto. Mejor sobre punto fijo (el robot viaja
    por el eje hasta el calibrador) que sobre algo que vibre.
@@ -98,8 +106,10 @@ Cada FGL 50: conector **M8, 4 pines, PNP**. Pinout estándar (confirmar con la h
 
 - El útil debe poder llegar **vertical (eje Z de herramienta hacia abajo)** al centro de la cruz, con
   trayectoria libre de colisión desde la posición de parking sobre el eje lineal.
-- Espacio para el **círculo de sondeo Ø30 mm** alrededor del centro, en horizontal, sin tocar los brazos.
-- Espacio para la **inmersión en Z** (~20–30 mm hacia abajo) sin tocar la base del calibrador.
+- Espacio para el **círculo de sondeo Ø12 mm** alrededor del centro, en horizontal, sin tocar los brazos
+  (más el diámetro de la boquilla; si se sondea la boquilla, ver la regla del radio mínimo del punto 1.4).
+- Espacio para la **aproximación/retracción Z** (30 mm / 8 mm por defecto) y para la inmersión de 5 mm
+  al otro lado del plano de haces.
 - El calibrador en posición **fija y accesible** a lo largo de la carrera del eje (un extremo es buena
   opción), de forma que se pueda calibrar antes de cada serie / tras cambio de boquilla.
 
@@ -108,7 +118,8 @@ Cada FGL 50: conector **M8, 4 pines, PNP**. Pinout estándar (confirmar con la h
 ## 5. Resumen de comprobaciones antes de la primera calibración
 
 - [ ] Dos FGL 50 montados en cruz, haces coplanarios (≤2–3 mm en Z) y ~perpendiculares.
-- [ ] Cruce de haces accesible vertical por el útil; Ø30 mm libres en horizontal; ≥25 mm libres abajo.
+- [ ] Cruce de haces accesible vertical por el útil; Ø12 mm libres en horizontal más margen de boquilla.
+- [ ] Espacio vertical libre para Approach Z 30 mm, Search Z 8 mm e Immerse Z 5 mm.
 - [ ] Boquilla real cabe en la horquilla con el círculo de sondeo (verificar diámetro).
 - [ ] Ambos sensores en **dark-operate** (haz cortado → 24 V), comprobado en *Diagnostics* (verde = cortado).
 - [ ] Cada salida a una entrada digital distinta del UR; filtro de entrada al mínimo.
@@ -121,11 +132,14 @@ Cada FGL 50: conector **M8, 4 pines, PNP**. Pinout estándar (confirmar con la h
 
 | Parámetro            | Valor por defecto | Nota |
 |----------------------|-------------------|------|
-| Radio de sondeo      | 15 mm             | Ø círculo 30 mm; bajar a 10 mm si la horquilla queda justa |
-| Velocidad de sondeo  | 50 mm/s           | Bajar para más precisión de flanco en hardware real |
+| Radio de sondeo      | 6 mm              | Ø círculo 12 mm, para la punta del hilo; con boquilla subir a ≥13–16 mm (regla del punto 1.4) |
+| Velocidad de sondeo  | 30 mm/s           | Bajar para más precisión de flanco en hardware real |
 | Aceleración          | 100 mm/s²         | |
-| Overrun              | 10°               | Margen angular del círculo |
-| Search Z             | 20 mm             | Recorrido de inmersión para hallar Z |
+| Overrun              | 10°               | Margen angular del círculo; no bajar con radios pequeños |
+| Search Z             | 8 mm              | Recorrido de retracción para liberar los haces |
+| Approach Z           | 30 mm             | Aproximación desde el lado seguro antes del sondeo runtime |
+| Immerse Z            | 5 mm              | Vuelta a través del plano de haces para capturar Z |
+| Invert Z             | desactivado       | Default CAPTRON; activar solo si el montaje necesita invertir los sentidos Z |
 | Ajuste de ángulo     | desactivado       | RX/RY; dejar para una segunda fase, tras validar XYZ |
 
 > El muestreo de flancos en la pantalla *Diagnostics* es a pocos Hz (validación de cableado/polaridad),

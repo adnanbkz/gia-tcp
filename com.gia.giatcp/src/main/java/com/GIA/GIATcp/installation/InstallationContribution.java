@@ -9,6 +9,7 @@ import com.GIA.GIATcp.installation.model.GiaTcp;
 import com.GIA.GIATcp.installation.model.IoOption;
 import com.GIA.GIATcp.installation.model.TcpStore;
 import com.GIA.GIATcp.tcpcalibration.engine.CalibrationResultSink;
+import com.GIA.GIATcp.tcpcalibration.math.TCPCalibrationMaths;
 import com.GIA.GIATcp.tcpcalibration.probe.CalibrationServer;
 import com.GIA.GIATcp.tcpcalibration.model.TCPCalibrationResult;
 import com.GIA.GIATcp.tcpcalibration.engine.TCPCalibrationRunner;
@@ -19,6 +20,7 @@ import com.GIA.GIATcp.util.Const;
 import com.GIA.GIATcp.util.ScriptResource;
 import com.GIA.GIATcp.util.UrScript;
 import com.GIA.GIATcp.util.comms.RobotRealtimeReader;
+import com.GIA.GIATcp.util.comms.SecondaryScriptSender;
 import com.ur.urcap.api.contribution.InstallationNodeContribution;
 import com.ur.urcap.api.contribution.installation.CreationContext;
 import com.ur.urcap.api.contribution.installation.InstallationAPIProvider;
@@ -38,6 +40,7 @@ import com.ur.urcap.api.domain.value.simple.Length;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -81,12 +84,13 @@ public class InstallationContribution implements InstallationNodeContribution, C
 	 * because it writes the DataModel and refreshes the view. {@link CalibrationResultSink}.
 	 */
 	@Override
-	public void storeCalibration(final int tcpId, final double[] correctionSi, final double diameterMm) {
+	public void storeCalibration(final int tcpId, final double[] correctionSi, final double diameterMm,
+			final double[] measuredPoseSi) {
 		SwingUtilities.invokeLater(new Runnable() {
 			@Override
 			public void run() {
 				try {
-					store.setCalibrationResult(tcpId, correctionSi, diameterMm);
+					store.setCalibrationResult(tcpId, correctionSi, diameterMm, measuredPoseSi);
 					view.refresh();
 				} catch (RuntimeException e) {
 					logger.warn("Failed to store referencing result for TCP {}", tcpId, e);
@@ -324,19 +328,66 @@ public class InstallationContribution implements InstallationNodeContribution, C
 
 	// ---------------- teach / move ----------------
 
-	/** Opens the move-robot panel; on confirmation stores the current TCP pose as the centre. */
+	/**
+	 * Opens the move-robot panel; on confirmation stores the current TCP pose as the centre.
+	 * The pose is only accepted when it was taught with the <b>reference TCP</b> active
+	 * (CAPTRON parity): taught with any other TCP, the stored centre would belong to a
+	 * different tool point and every later probe would silently carry that offset.
+	 */
 	public void teachCenter(final GiaTcp tcp) {
 		apiProvider.getUserInterfaceAPI().getUserInteraction().getUserDefinedRobotPosition(new RobotPositionCallback2() {
 			@Override
 			public void onOk(PositionParameters positionParameters) {
+				if (!isRefResolvable(tcp.refTcp)) {
+					JOptionPane.showMessageDialog(null, texts().t("REF_ERR_REF_MISSING"),
+							Const.INSTALL_TITLE, JOptionPane.ERROR_MESSAGE);
+					return;
+				}
+				double[] active = positionParameters.getTCPOffset() == null
+						? new double[6] : positionParameters.getTCPOffset().toArray();
+				if (!sameOffset(active, resolveTcpPoseSi(tcp.refTcp))) {
+					logger.warn("Centre pose rejected: taught with a TCP other than the reference '{}'", tcp.refTcp);
+					JOptionPane.showMessageDialog(null, texts().t("WIZ_CENTER_WRONG_TCP", tcp.refTcp),
+							Const.INSTALL_TITLE, JOptionPane.ERROR_MESSAGE);
+					return;
+				}
 				tcp.centerPose = positionParameters.getPose().toArray();
+				// A new centre invalidates the referenced pose (CAPTRON: teaching j() clears
+				// h()): the old reference belongs to the old geometry, so re-reference.
+				tcp.calibrated = false;
+				tcp.refPose = new double[6];
 				store.save(tcp);
 				view.refresh();
 			}
 		});
 	}
 
+	/** Element-wise pose-offset equality with slack: 0.1 mm positional, ~0.06° rotational. */
+	private static boolean sameOffset(double[] a, double[] b) {
+		for (int i = 0; i < 3; i++) {
+			if (Math.abs(a[i] - b[i]) > 1e-4) {
+				return false;
+			}
+		}
+		for (int i = 3; i < 6; i++) {
+			if (Math.abs(a[i] - b[i]) > 1e-3) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	public void moveToCenter(GiaTcp tcp) {
+		moveToCenter(tcp, null);
+	}
+
+	/**
+	 * Opens the guarded move-robot screen targeting the taught centre and runs
+	 * {@code onArrived} once the robot has reached it. If the user backs out of the move
+	 * screen the callback simply never fires (the URCap API has no cancel event), so
+	 * callers must not lock UI state before it runs.
+	 */
+	public void moveToCenter(GiaTcp tcp, final Runnable onArrived) {
 		if (!tcp.isCenterTaught()) {
 			return;
 		}
@@ -345,8 +396,25 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		movement.requestUserToMoveRobot(pose, new RobotMovementCallback() {
 			@Override
 			public void onComplete(MovementCompleteEvent movementCompleteEvent) {
+				if (onArrived != null) {
+					onArrived.run();
+				}
 			}
 		});
+	}
+
+	/**
+	 * Activates this TCP's reference TCP on the controller (a one-line secondary program,
+	 * as CAPTRON does before its guided move): the move-robot screen and the probe poses
+	 * must both work with the reference TCP, not whatever TCP happens to be active.
+	 * Blocking socket I/O — call off the EDT. No-op returning false if unresolvable/unreachable.
+	 */
+	public boolean activateReferenceTcp(GiaTcp tcp) {
+		if (!isRefResolvable(tcp.refTcp)) {
+			return false;
+		}
+		String program = "set_tcp(" + UrScript.pose(resolveTcpPoseSi(tcp.refTcp)) + ")\n";
+		return new SecondaryScriptSender().send(program);
 	}
 
 	private Pose toPose(double[] si) {
@@ -361,9 +429,20 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		double[] ref = resolveTcpPoseSi(tcp.refTcp);
 		CalibrationResult result = calibration.calibrate(tcp, ref, isErrInterrupt(), getDebugLvl());
 		if (result.isSuccess()) {
-			store.setCalibrationResult(tcp.id, result.correctionSi, result.diameterMm);
+			store.setCalibrationResult(tcp.id, result.correctionSi, result.diameterMm,
+					measuredPoseFrom(tcp.centerPose, result.correctionSi));
 		}
 		return result;
+	}
+
+	/**
+	 * Reconstructs the measured beam-plane pose from a legacy-script result, which only
+	 * reports the correction (measured vs the taught centre): correction = pSearchZ⁻¹·pRef
+	 * with identical orientations, so pSearchZ = pRef · inv(translation of the correction).
+	 */
+	private static double[] measuredPoseFrom(double[] pRef, double[] correctionSi) {
+		double[] translationOnly = { correctionSi[0], correctionSi[1], correctionSi[2], 0, 0, 0 };
+		return TCPCalibrationMaths.poseTrans(pRef, TCPCalibrationMaths.poseInv(translationOnly));
 	}
 
 	public void stopCalibration() {
@@ -391,15 +470,30 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		boolean measured = r.status == TCPCalibrationResult.Status.OK
 				|| r.status == TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
 		if (measured && r.correction != null) {
-			store.setCalibrationResult(tcp.id, r.correction, r.diameterMm);
+			// CAPTRON parity: a manual calibration stores correction + diameter every time, but
+			// only the FIRST run after teaching establishes the reference pose. Later tests must
+			// NOT rebase it — the drift they are supposed to show would self-erase on each click.
+			double[] refPoseUpdate = tcp.calibrated && tcp.hasRefPose() ? null : r.measuredPose;
+			store.setCalibrationResult(tcp.id, r.correction, r.diameterMm, refPoseUpdate);
 		}
 		return r;
+	}
+
+	/**
+	 * Aborts a live test probe (CAPTRON parity for the Stop button): a normal program sent
+	 * over Secondary preempts the running probe program and stops the motion; the extra
+	 * reply line unblocks the transport, which is otherwise waiting on its return socket.
+	 * Blocking socket I/O — call off the EDT.
+	 */
+	public void stopTestCalibration() {
+		SecondaryProbeTransport.sendStop(new SecondaryScriptSender());
 	}
 
 	private TCPCalibrationSpec buildTestSpec(GiaTcp tcp) {
 		CalibParams p = tcp.params;
 		TCPCalibrationSpec s = new TCPCalibrationSpec();
-		s.pRef = tcp.centerPose;
+		s.pRef = tcp.correctionRefPose();
+		s.pStart = tcp.centerPose;
 		s.refTcp = resolveTcpPoseSi(tcp.refTcp);
 		s.in1 = tcp.ioX;
 		s.in2 = tcp.ioY;
@@ -408,7 +502,7 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		s.velMs = p.speedMmS / 1000.0;
 		s.overrunDeg = p.overrunDeg;
 		s.zSearchMm = p.signedSearchZMm();
-		s.zImmerseMm = 0.0;
+		s.zImmerseMm = p.signedImmerseZMm(Const.DEF_IMMERSEZ_MM);
 		s.adjustAngle = p.adjustAngle;
 		s.orientationDzMm = p.offsetZMm;
 		s.maxAngleRxDeg = p.maxAngleRxDeg;

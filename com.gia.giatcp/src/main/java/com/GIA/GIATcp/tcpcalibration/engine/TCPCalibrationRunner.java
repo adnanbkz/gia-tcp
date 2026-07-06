@@ -24,8 +24,10 @@ public final class TCPCalibrationRunner {
 
 	/** Runs a full XYZ (+ optional orientation) calibration. Call off the UI thread. */
 	public TCPCalibrationResult calibrate(TCPCalibrationSpec s) {
-		// 1. XY probe around the taught centre.
-		CircleData c = transport.probeCircle(s.pRef, s);
+		// 1. XY probe around the taught centre (CAPTRON pStart). The correction reference
+		// (s.pRef, CAPTRON h()) is only compared against, never probed around.
+		double[] pStart = s.pStart != null ? s.pStart : s.pRef;
+		CircleData c = transport.probeCircle(pStart, s);
 		if (c == null) {
 			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_ROBOT_REPLY);
 		}
@@ -33,7 +35,7 @@ public final class TCPCalibrationRunner {
 			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_INTERSECT);
 		}
 		TCPCalibrationMaths.CenterResult centre =
-				TCPCalibrationMaths.computeCenter(c.poses, s.pRef, s.radiusMm / 1000.0);
+				TCPCalibrationMaths.computeCenter(c.poses, pStart, s.radiusMm / 1000.0);
 		if (centre.error != TCPCalibrationMaths.OK) {
 			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_INTERSECT);
 		}
@@ -51,6 +53,12 @@ public final class TCPCalibrationRunner {
 
 		TCPCalibrationResult.Status status = TCPCalibrationMaths.withinTol(correction, s.tolXYZm)
 				? TCPCalibrationResult.Status.OK : TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
+		// Diameter band (CAPTRON parity): a wrong/bent tool can pass XYZ and still probe a
+		// diameter far off the expected one. Only checked when nominal and band are known.
+		if (status == TCPCalibrationResult.Status.OK && s.diamTolMm > 0 && s.diamNominalMm > 0
+				&& !TCPCalibrationMaths.withinTolVal(diameterMm, s.diamNominalMm, s.diamTolMm)) {
+			status = TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
+		}
 
 		// 4. Optional orientation: try a higher circle first, then a lower one.
 		if (s.adjustAngle && status == TCPCalibrationResult.Status.OK) {
@@ -68,7 +76,7 @@ public final class TCPCalibrationRunner {
 			correction[4] += angle[1];
 		}
 
-		return new TCPCalibrationResult(status, correctedTcp, correction, diameterMm);
+		return new TCPCalibrationResult(status, correctedTcp, correction, diameterMm, pSearchZ);
 	}
 
 	/**

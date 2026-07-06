@@ -123,7 +123,13 @@ public class OverviewCard extends JPanel {
 		calibrate.setText(t.t("BTN_CALIBRATE_TEST"));
 		calibrate.addActionListener(e -> onCalibrate());
 		stop.setText(t.t("BTN_STOP"));
-		stop.addActionListener(e -> contribution.stopCalibration());
+		// Stop both stacks: the legacy referencing (primary 30001) and the live test probe
+		// (secondary 30002) — before, Stop only reached the legacy path, so a running
+		// "Calibrar (test)" could not be aborted from the URCap. Off the EDT: socket I/O.
+		stop.addActionListener(e -> new Thread(() -> {
+			contribution.stopCalibration();
+			contribution.stopTestCalibration();
+		}, "gia-tcp-stop").start());
 		body.add(leftRow(calibrate, stop));
 		body.add(Box.createVerticalStrut(8));
 
@@ -282,6 +288,12 @@ public class OverviewCard extends JPanel {
 		});
 	}
 
+	/**
+	 * Live test flow, mirroring CAPTRON's Overview → Calibrate: activate the reference
+	 * TCP, guide the user's robot to the taught centre with the guarded move screen, and
+	 * only then inject the probe motions (which are small and local to the fixture).
+	 * Probing straight from an arbitrary parking pose would movel blind into the fork.
+	 */
 	private void onCalibrate() {
 		final GiaTcp sel = contribution.getSelectedTcp();
 		if (sel == null) {
@@ -299,7 +311,6 @@ public class OverviewCard extends JPanel {
 			}
 			return;
 		}
-		status.setText(t.t("STATUS_CALIBRATING"));
 		calibrate.setEnabled(false);
 		new Thread(new Runnable() {
 			@Override
@@ -318,6 +329,33 @@ public class OverviewCard extends JPanel {
 					});
 					return;
 				}
+				contribution.activateReferenceTcp(sel);
+				SwingUtilities.invokeLater(new Runnable() {
+					@Override
+					public void run() {
+						status.setText(t.t("TEST_MOVE_CENTER"));
+						// Re-enable before the move screen: backing out of it fires no
+						// callback, so the button must stay usable for a retry.
+						calibrate.setEnabled(true);
+						contribution.moveToCenter(sel, new Runnable() {
+							@Override
+							public void run() {
+								startTestProbe(sel);
+							}
+						});
+					}
+				});
+			}
+		}, "gia-tcp-test-calibrate").start();
+	}
+
+	/** Runs the actual probe once the robot sits at the taught centre. */
+	private void startTestProbe(final GiaTcp sel) {
+		status.setText(t.t("STATUS_CALIBRATING"));
+		calibrate.setEnabled(false);
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
 				final TCPCalibrationResult result = contribution.runTestCalibration(sel);
 				SwingUtilities.invokeLater(new Runnable() {
 					@Override
@@ -329,7 +367,7 @@ public class OverviewCard extends JPanel {
 					}
 				});
 			}
-		}, "gia-tcp-test-calibrate").start();
+		}, "gia-tcp-test-probe").start();
 	}
 
 	/** Localized one-line description of a calibration status. */

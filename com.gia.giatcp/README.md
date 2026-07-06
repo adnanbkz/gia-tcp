@@ -1,82 +1,84 @@
 # GIA TCP Calibrator (URCap)
 
-A GIA ROBOTICS Universal Robots URCap that checks, validates and recalibrates a tool
-centre point (TCP) using a **light-barrier** TCP measurement station. No external licence
-dependency.
+URCap de GIA ROBOTICS para comprobar, validar y recalibrar el TCP de una herramienta con una estacion fija de dos barreras de luz. El hardware soportado actualmente es un unico modelo fisico: dos SensoPart FGL 50 montados cruzados.
 
 ## Hardware
 
-- **2 × SensoPart FGL 50-IK-50-PS-M4** infrared fork sensors (order no. 832-11022),
-  mounted **crossed at ~90°** with coplanar beams, forming a "+" the tool enters from above.
-- Each sensor: PNP digital output, M8 4-pin → two UR digital inputs.
-- Both sensors set to **dark-operate** (output active = beam blocked), because the algorithm
-  treats *digital input HIGH = beam interrupted*.
-- See `docs/montaje_calibrador_2sensores.md` for the full mounting & wiring spec.
+- 2 x SensoPart FGL 50-IK-50-PS-M4, ref. 832-11022.
+- Cada sensor es una horquilla de un solo haz; los dos se montan cruzados a unos 90 grados y coplanarios.
+- Cada salida PNP va a una entrada digital distinta del UR.
+- Ambos sensores deben ir en dark-operate: entrada HIGH = haz cortado.
+- Ver `docs/montaje_calibrador_2sensores.md` para la especificacion mecanica y electrica.
 
-## Features
+## Flujo Actual
 
-- **Installation page "GIA TCP Calibrator"**
-  - Overview: manage up to 30 TCPs (add / remove / rename / select), TCP correction readout,
-    CALIBRATED badge, manual Calibrate / Stop.
-  - Setup Wizard (7 steps): TCP variant → input X/Y → reference TCP → teach centre pose →
-    parameters → referencing motion → done.
-  - **Diagnostics** (read-only): live digital-input indicators + live TCP pose, edge log while
-    you sweep the tool through the beams, Move-to-center, and a **Repeatability test**
-    (N probes, mean/sigma/range, measure-only).
-  - Settings: error handling mode + log debug level.
-- **Program node "GIA TCP Action"**
-  - Actions: TCP Check, TCP Validate, TCP Recalibrate.
-  - Tabs: Basic Settings, Tolerances, Assignment.
-  - Auto-inserted "If Error" child node for error handling.
+### Instalacion
 
-## Architecture notes
+- `Installation -> GIA TCP Calibrator` gestiona hasta 30 TCPs.
+- El Setup Wizard configura variante, entradas X/Y, TCP de referencia, pose de centro y parametros de sondeo.
+- `Fijar centro` solo acepta la pose si se enseno con el TCP de referencia activo (paridad CAPTRON); con otro TCP activo avisa y no guarda. Profundidad correcta del teach (guia oficial CAPTRON): ambos haces cortados y la punta inmersa solo 1-2 mm bajo el plano de haces.
+- `Calibrar (test)` usa el flujo nuevo con secuencia guiada (como CAPTRON): comprueba Remote Control, activa el TCP de referencia (`set_tcp`), abre la pantalla de mover-robot hasta el centro ensenado y, al llegar, `SecondaryProbeTransport` envia `tcpcalib.script` por el puerto 30002 (cada programa inyectado empieza con `set_tcp(refTcp)`), recibe las poses crudas en `127.0.0.1:5511` y Java calcula la geometria con `TCPCalibrationMaths`.
+- `Iniciar referenciado` del wizard y el test de repetibilidad siguen usando el camino legacy por primary 30001 y retorno 5510 (ambos comprueban Remote Control antes de inyectar). Siguen activos, pero el nodo runtime nuevo no depende de esa matematica URScript.
 
-- The whole calibration algorithm runs in URScript (`src/main/resources/scripts`,
-  functions `gia_tcp_*` / `gia__*`): a circular probe around the taught centre detects the
-  two beam-interrupt chords, intersects them (`gia__calc2DIntersect`) for the XY centre, then
-  searches Z. No embedded RPC server is used — the line intersection is pure URScript.
-- **Live motion from the installation page** (calibration, repeatability) is sent to the
-  robot's **primary interface (port 30001)** as a program; the program streams its result back
-  over a loopback socket (port 5510). Motion cannot run as a secondary program, hence primary.
-- **Live state reads** for Diagnostics are non-intrusive: digital inputs via the IO API
-  (`DigitalIO.getValue()`); TCP pose via the realtime interface (port 30003,
-  `RobotRealtimeReader`). No program runs while monitoring.
-- **Program-node executions** use the standard URCap `generateScript`, calling the `gia_tcp_*`
-  library the installation node contributes as a preamble.
+### Nodo De Programa
+
+- El nodo activo se llama `GIA TCP` y lo registra `TCPCalibrationService`.
+- `generateScript()` llama a `tcpc__rtCalib(...)`.
+- El robot solo ejecuta movimiento realtime, lectura de entradas y captura de `get_actual_tcp_pose()`.
+- `CalibrationServer` escucha en `127.0.0.1:5512`, dirige los pasos del robot y hace toda la geometria en Java.
+- Acciones disponibles: Check, Validate y Recalibrate.
+- Tolerancias por eje X/Y/Z y de diametro (fila con el simbolo de diametro): Validate/Recalibrate fallan si la correccion o el diametro sondeado salen de banda.
+- Diametro (semantica CAPTRON): el referenciado guarda la medida cruda; en runtime se corrige con `diametro real - diametro referenciado` (si hay diametro real configurado) y se compara contra la banda.
+- Referencia de pose (semantica CAPTRON): el referenciado guarda la pose medida en el plano de haces; las calibraciones posteriores miden su correccion contra esa pose (no contra el centro enseñado a mano), asi el error del teach desaparece tras el primer referenciado. El circulo de sondeo sigue arrancando en el centro enseñado. Re-enseñar el centro invalida la referencia y obliga a re-referenciar.
+- Recalibrate puede escribir el TCP corregido en `giaActionTCP` o en una variable seleccionada, y opcionalmente aplicar `set_tcp`.
+- Check y Validate respaldan el TCP activo (`get_tcp_offset`) y lo restauran al terminar, como CAPTRON; solo Recalibrate deja aplicado el TCP corregido.
+- El nodo legacy `program/action/ProgTcpAction*` queda en el codigo fuente, pero no se registra en `Activator`.
+
+## Distancias Y Convencion Z
+
+Los campos de UI son magnitudes positivas. El signo real lo calcula `CalibParams` segun `invertZ`.
+
+- Default CAPTRON: `invertZ=false`. Con herramienta top-down cuyo `+Z` apunta hacia abajo,
+  Approach/Search usan `-toolZ` para retirarse hacia arriba e Immerse usa `+toolZ` para volver a entrar.
+- Aproximacion segura: misma direccion que la retraccion de busqueda.
+- Busqueda Z: se retrae hasta que ambos haces quedan libres.
+- Inmersion Z: vuelve en direccion opuesta hasta cortar ambos haces.
+- Defaults actuales (dimensionados para sondear la PUNTA DEL HILO): radio 6 mm, velocidad 30 mm/s, aceleracion 100 mm/s2, overrun 10 grados, Search Z 8 mm, Approach Z 30 mm, Immerse Z 5 mm.
+- Radio minimo (fisica del armado): para que el hilo de flancos se arme, ambos haces deben quedar LIBRES a la vez, y en el circulo eso solo ocurre cerca de las bisectrices -> radio > (radio de herramienta + medio haz + margen) / sen 45. Hilo Ø1.2 -> 6 mm sobra; sondear la BOQUILLA Ø16-20 exige radio >= ~13-16 mm (subirlo por TCP en el wizard). El overrun de 10 grados no debe bajarse con radios pequenos (debe superar el semiarco bloqueado en el punto de arranque).
+
+Con el montaje por defecto esto implica aproximarse 30 mm por encima del cruce, bajar al centro, sondear un circulo de diametro 12 mm, retraer 8 mm para liberar los haces y volver a entrar hasta 5 mm al otro lado del centro ensenado. Tras el circulo ya no hay salto de vuelta al centro: la busqueda Z va directa al centro calculado. Al terminar, la punta se recoloca en el punto medio entre el flanco de liberacion y el de corte, de modo que queda justo entre los dos haces (paridad con la recolocacion final de CAPTRON).
+
+## Arquitectura
+
+- `tcpcalibration/math/TCPCalibrationMaths.java`: matematica pura Java, sin dependencia de UR API.
+- `src/main/resources/scripts/tcpcalib.script`: primitivas realtime `tcpc__*`, sin calculo geometrico pesado.
+- `TCPCalibrationRunner`: secuencia comun de calibracion sobre un `ProbeTransport`.
+- `SecondaryProbeTransport`: calibracion live desde Java por secondary 30002.
+- `ServerProbeTransport` + `CalibrationServer`: calibracion dentro del programa en ejecucion.
+- `src/main/resources/scripts/inst.script`, `gl.script`, `interrupt_points.script`, `search_z.script`, `adjust_angle.script`: stack legacy usado aun por referenciado del wizard/repetibilidad y por el nodo viejo desactivado.
 
 ## Build
 
+Ejecutar desde `com.gia.giatcp/`:
+
+```bash
+mvn test
+mvn clean package
+mvn install -Pursim
+mvn install -Premote
 ```
-mvn clean package                # -> target/GIA-TCP-1.0.urcap
-mvn install -Pursim              # copy jar into ${ursim.home}/.urcaps
-mvn install -Premote             # scp to a real robot (set urcap.install.host/password)
-```
 
-Requires the UR Cap API 1.17.0 in the local Maven repo (same as the GIAWeld project).
-Builds run offline (`mvn -o ...`) from the cached dependencies.
+El build genera:
 
-## Hardware-test checklist (real sensor required)
+- `target/GIATcp-1.0.jar`
+- `target/GIA-TCP-1.0.urcap`
 
-The UR simulator cannot trigger the light barriers, so end-to-end calibration must be
-verified on a robot with the two physical sensors:
+## Checklist En Hardware
 
-1. Wire each sensor output to a digital input; set both to dark-operate; note the input names.
-2. **Diagnostics**: sweep the tool into each beam and confirm the matching input goes
-   **HIGH/green** (if inverted, flip the sensor N.O./N.C.). Set the UR input filter to minimum.
-3. Setup wizard: pick the X and Y inputs, a reference TCP (activate it on the robot first),
-   jog so both beams are interrupted and press **Set Center**, set radius / speed / search Z.
-4. **Start Referencing** — the robot probes the sensors and reports a correction.
-5. **Diagnostics → Repeatability test** (e.g. 10 runs): confirm the 1-sigma spread is small
-   (sub-0.1 mm target); lower the probe speed if needed. Repeatability ≠ accuracy — validate
-   accuracy against an independent reference.
-6. In a program, add **GIA TCP Action → TCP Recalibrate** and confirm it reproduces the
-   correction and writes `giaActionTCP` (or your custom variable).
-
-## Follow-ups / out of scope (v1)
-
-- Metrology-grade edge capture is already in URScript (control-loop rate); the Diagnostics
-  edge log is a few-Hz wiring/sanity aid, not metrology.
-- "Try again x times" retry loop wiring on the If-Error node.
-- RX/RY angle adjustment: leave disabled until XYZ is validated on hardware.
-- Localisations beyond English; pendant on-screen-keyboard polish.
-- Tuning default parameters for the FGL 50 (beam width, probe speed).
+1. Montar los dos FGL 50 en cruz, coplanarios y rigidos.
+2. Verificar hueco para circulo de sondeo de diametro 12 mm mas diametro real de boquilla/hilo.
+3. Verificar espacio vertical para aproximacion, retraccion Search Z e inmersion.
+4. Configurar dark-operate y filtro de entrada digital al minimo.
+5. En Diagnostics, confirmar que cada entrada pasa a HIGH/verde al cortar su haz.
+6. Configurar TCP, ensenar centro y ejecutar `Calibrar (test)` o un nodo `GIA TCP` con `Guardar como referencia de instalacion`.
+7. Medir repetibilidad con varios ciclos antes de fiarse de la correccion en produccion.

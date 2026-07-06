@@ -27,6 +27,12 @@ public class GiaTcp {
 	public double[] correction = new double[6];
 	/** Measured tool diameter in mm. */
 	public double diameterMm;
+	/**
+	 * Pose measured by the referencing run (base frame, SI): where the tip actually sat on
+	 * the beam plane. CAPTRON's h(): later runs compute their correction against this pose,
+	 * so the hand-taught centre drops out of the measurement loop after the first referencing.
+	 */
+	public double[] refPose = new double[6];
 
 	public CalibParams params = new CalibParams();
 
@@ -42,5 +48,23 @@ public class GiaTcp {
 			}
 		}
 		return false;
+	}
+
+	public boolean hasRefPose() {
+		for (double v : refPose) {
+			if (v != 0.0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Pose the correction is measured against (CAPTRON semantics): the pose captured at
+	 * referencing when there is one, else the hand-taught centre (first referencing, or
+	 * installations saved before the reference pose existed).
+	 */
+	public double[] correctionRefPose() {
+		return calibrated && hasRefPose() ? refPose : centerPose;
 	}
 }

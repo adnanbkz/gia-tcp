@@ -62,7 +62,7 @@ public final class SecondaryProbeTransport implements ProbeTransport {
 		String call = "tcpc__runCircle(" + UrScript.pose(pStart) + ", " + s.in1 + ", " + s.in2 + ", "
 				+ UrScript.num(s.radiusMm) + ", " + UrScript.num(s.accMs2) + ", " + UrScript.num(s.velMs) + ", "
 				+ UrScript.num(s.overrunDeg) + ", \"127.0.0.1\", " + RETURN_PORT + ")";
-		return CalibCsv.parseCircle(sendAndReceive(call));
+		return CalibCsv.parseCircle(sendAndReceive(setTcpLine(s) + call));
 	}
 
 	@Override
@@ -70,7 +70,34 @@ public final class SecondaryProbeTransport implements ProbeTransport {
 		String call = "tcpc__runSearchZ(" + UrScript.pose(pCentre) + ", " + s.in1 + ", " + s.in2 + ", "
 				+ UrScript.num(s.zSearchMm) + ", " + UrScript.num(s.zImmerseMm) + ", "
 				+ UrScript.num(s.accMs2) + ", " + UrScript.num(s.velMs) + ", \"127.0.0.1\", " + RETURN_PORT + ")";
-		return CalibCsv.parseTaggedPose(sendAndReceive(call), "Z");
+		return CalibCsv.parseTaggedPose(sendAndReceive(setTcpLine(s) + call), "Z");
+	}
+
+	/**
+	 * Every injected program activates the reference TCP first (as CAPTRON does): the
+	 * captured poses — and therefore the correction — are only valid measured with the
+	 * reference TCP, and the controller's active TCP at click time is unknown.
+	 */
+	private static String setTcpLine(TCPCalibrationSpec s) {
+		return s.refTcp == null ? "" : "set_tcp(" + UrScript.pose(s.refTcp) + ")\n";
+	}
+
+	/**
+	 * Stops a running live probe: a normal ({@code def}) program sent over Secondary
+	 * preempts the running probe program (stopping its motion), and the "STOP" line sent
+	 * to the return port unblocks the pending {@link #sendAndReceive} read immediately
+	 * (it parses as no valid reply, so the runner reports NO_ROBOT_REPLY).
+	 */
+	public static boolean sendStop(SecondaryScriptSender sender) {
+		String program = "def giaTcpStop():\n"
+				+ "  stopl(2.0)\n"
+				+ "  if (socket_open(\"127.0.0.1\", " + RETURN_PORT + ", \"giastop\")):\n"
+				+ "    socket_send_string(\"STOP\", \"giastop\")\n"
+				+ "    socket_send_byte(10, \"giastop\")\n"
+				+ "    socket_close(\"giastop\")\n"
+				+ "  end\n"
+				+ "end\n";
+		return sender.send(program);
 	}
 
 	/** Sends {@code lib + call} via Secondary and returns the single reply line (or null). */

@@ -127,8 +127,10 @@ public final class RepeatabilityController {
 				.append(UrScript.num(p.radiusMm)).append(", ")
 				.append(UrScript.num(accRad)).append(", ").append(UrScript.num(velRad)).append(", ")
 				.append(UrScript.num(p.overrunDeg)).append(", ")
-				.append(UrScript.num(p.signedSearchZMm())).append(", 0.0, ")
-				.append(UrScript.num(p.realDiameterMm)).append(", ")
+				.append(UrScript.num(p.signedSearchZMm())).append(", ")
+				.append(UrScript.num(p.signedImmerseZMm(Const.DEF_IMMERSEZ_MM))).append(", ")
+				// Raw measured diameter (diamOffset 0): repeatability compares dispersion.
+				.append("0, ")
 				.append(tolMin).append(", ").append(tolMax).append(")\n");
 		sb.append("  gia__st = gia_tcp_getStatus(").append(id).append(")\n");
 		sb.append("  gia__cc = gia_tcp_getCalibCorrection(").append(id).append(")\n");

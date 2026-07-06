@@ -45,6 +45,42 @@ class CalibrationServerParseInitTest {
 	}
 
 	@Test
+	void lineWithoutDiameterTailDisablesDiameterCheck() {
+		String line = "INIT;" + POSES + ";15;1;1;1;0;5;10;10;0;3;0";
+		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
+		assertEquals(0.0, s.diamTolMm, 1e-9);
+		assertEquals(0.0, s.diamNominalMm, 1e-9);
+	}
+
+	@Test
+	void newLineParsesDiameterToleranceAndNominal() {
+		// + tolDmm;diamNomMm
+		String line = "INIT;" + POSES + ";15;1;1;1;0;5;10;10;0.5;3;0;2;16.2";
+		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
+		assertEquals(0.5, s.diamOffsetMm, 1e-9);
+		assertEquals(2.0, s.diamTolMm, 1e-9);
+		assertEquals(16.2, s.diamNominalMm, 1e-9);
+	}
+
+	@Test
+	void lineWithoutStartPoseLeavesItNull() {
+		String line = "INIT;" + POSES + ";15;1;1;1;0;5;10;10;0.5;3;0;2;16.2";
+		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
+		assertNull(s.pStart, "no pStart tail -> circle falls back to pRef");
+	}
+
+	@Test
+	void newLineParsesStartPose() {
+		// + pStartCsv (taught centre; pRef then carries the referenced pose)
+		String line = "INIT;" + POSES + ";15;1;1;1;0;5;10;10;0.5;3;0;2;16.2;0.4,0.5,0.6,0,0,0";
+		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
+		assertTrue(s.pStart != null);
+		assertEquals(0.4, s.pStart[0], 1e-9);
+		assertEquals(0.6, s.pStart[2], 1e-9);
+		assertEquals(0.1, s.pRef[0], 1e-9); // pRef untouched by the tail
+	}
+
+	@Test
 	void malformedReturnsNull() {
 		assertNull(CalibrationServer.parseInit(null));
 		assertNull(CalibrationServer.parseInit("NOPE;1;2;3"));

@@ -99,8 +99,11 @@ public class CalibrationController {
 				.append(UrScript.num(p.radiusMm)).append(", ")
 				.append(UrScript.num(accRad)).append(", ").append(UrScript.num(velRad)).append(", ")
 				.append(UrScript.num(p.overrunDeg)).append(", ")
-				.append(UrScript.num(p.signedSearchZMm())).append(", 0.0, ")
-				.append(UrScript.num(p.realDiameterMm)).append(", ")
+				.append(UrScript.num(p.signedSearchZMm())).append(", ")
+				.append(UrScript.num(p.signedImmerseZMm(Const.DEF_IMMERSEZ_MM))).append(", ")
+				// Referencing stores the RAW measured diameter (diamOffset 0, as CAPTRON):
+				// the real-vs-measured bias is applied later, at runtime, as real - stored.
+				.append("0, ")
 				.append(tolMin).append(", ").append(tolMax).append(")\n");
 		if (p.adjustAngle) {
 			sb.append("if (gia_tcp_isActionOk(").append(id).append(")):\n");
