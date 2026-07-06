@@ -387,7 +387,52 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 			}
 		});
 		p.add(varCombo);
+
+		// Commissioning utilities (CAPTRON Move Start / Move Approach): guarded move-robot
+		// screen to the action's start pose or its approach point.
+		JPanel moveRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+		JButton moveStart = new JButton(t.t("ACT_MOVE_START"));
+		JButton moveApproach = new JButton(t.t("ACT_MOVE_APPROACH"));
+		moveStart.addActionListener(e -> moveToActionPose(false));
+		moveApproach.addActionListener(e -> moveToActionPose(true));
+		moveRow.add(moveStart);
+		moveRow.add(moveApproach);
+		p.add(moveRow);
 		return p;
+	}
+
+	/**
+	 * Opens the guarded move screen towards the action start/approach pose. The reference
+	 * TCP is activated first (as the probe does); if that fails (Local mode), the user is
+	 * warned that the move screen will use whatever TCP is currently active.
+	 */
+	private void moveToActionPose(final boolean approach) {
+		final TCPCalibrationContribution c = provider.get();
+		String issue = c.readinessIssueKey();
+		if (issue != null) {
+			JOptionPane.showMessageDialog(calibrateNow, t.t(issue), t.t("ACT_MOVE_START"),
+					JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		final InstallationContribution inst = c.getInstallation();
+		final GiaTcp tcp = c.getSelectedTcp();
+		final double[] pose = approach ? c.actionApproachPose() : c.actionStartPose();
+		if (inst == null || tcp == null || pose == null) {
+			return;
+		}
+		new Thread(() -> {
+			final boolean tcpActivated = inst.activateReferenceTcp(tcp);
+			SwingUtilities.invokeLater(() -> {
+				if (!tcpActivated) {
+					int go = JOptionPane.showConfirmDialog(calibrateNow, t.t("ACT_MOVE_TCP_WARN", tcp.refTcp),
+							t.t("ACT_MOVE_START"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+					if (go != JOptionPane.YES_OPTION) {
+						return;
+					}
+				}
+				c.requestMove(pose, null);
+			});
+		}, "gia-tcp-node-move").start();
 	}
 
 	public void refresh(TCPCalibrationContribution c) {

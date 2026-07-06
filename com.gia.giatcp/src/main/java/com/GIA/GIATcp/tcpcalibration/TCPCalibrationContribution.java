@@ -73,7 +73,14 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		if (tcp == null || !tcp.isCenterTaught()) {
 			return;
 		}
-		double[] c = tcp.centerPose;
+		requestMove(tcp.centerPose, onArrived);
+	}
+
+	/** Opens the guarded move-robot screen towards an arbitrary base-frame pose (SI). */
+	public void requestMove(double[] c, final Runnable onArrived) {
+		if (c == null) {
+			return;
+		}
 		Pose pose = programAPI.getValueFactoryProvider().getPoseFactory()
 				.createPose(c[0], c[1], c[2], c[3], c[4], c[5], Length.Unit.M, Angle.Unit.RAD);
 		apiProvider.getUserInterfaceAPI().getUserInteraction().getRobotMovement()
@@ -85,6 +92,29 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 						}
 					}
 				});
+	}
+
+	/**
+	 * Start pose of the configured action (CAPTRON Move Start: the referenced pose h() for
+	 * Check/Validate, the taught centre j() for Recalibrate), or null if not set up.
+	 */
+	public double[] actionStartPose() {
+		GiaTcp tcp = getSelectedTcp();
+		if (tcp == null || !tcp.isCenterTaught()) {
+			return null;
+		}
+		return getAction() == Const.ACTION_RECALIBRATE ? tcp.centerPose : tcp.correctionRefPose();
+	}
+
+	/** Approach pose: the start pose shifted by the node's Approach Z along the tool axis. */
+	public double[] actionApproachPose() {
+		GiaTcp tcp = getSelectedTcp();
+		double[] start = actionStartPose();
+		if (tcp == null || start == null) {
+			return null;
+		}
+		double dz = tcp.params.signedApproachZMm(getApproachZ()) / 1000.0;
+		return TCPCalibrationMaths.poseTrans(start, new double[] { 0, 0, dz, 0, 0, 0 });
 	}
 
 	/** Wraps every DataModel / program-tree mutation in an UndoableChanges scope (required). */
