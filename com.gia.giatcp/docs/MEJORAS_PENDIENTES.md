@@ -60,12 +60,11 @@
     `tcp_action/A.java`, textos i18n del grupo de tolerancias). Útil como referencia si se
     abordan los puntos 6 y 7.
 
-20. **"Iniciar referenciado" en modo pasivo para modo Local.** En un e-Series en modo Local la
-    inyección por 30001/30002 está bloqueada (el robot del usuario lleva pendant 3PE y no puede
-    usar Remote Control). Propuesta acordada como candidata: al pulsar "Iniciar referenciado" en
-    modo Local, en vez del aviso, el wizard pasa a modo espera ("abre el programa GIA_Referenciar
-    y pulsa Play...") y se completa solo cuando el sink del `CalibrationServer` (5512) persiste el
-    referenciado del programa. Cero cambios de protocolo; solo UI del wizard + callback del sink.
+- ~~20. "Iniciar referenciado" en modo pasivo para modo Local~~ (aplicada 2026-07-07): en modo
+  Local el botón ya no muestra un error — pasa a espera pasiva con instrucciones (nodo GIA TCP
+  + persist + Play), y el paso se completa solo cuando el sink del `CalibrationServer` (5512)
+  persiste el referenciado de ese TCP (`InstallationContribution.ReferencingListener`). El
+  botón Parar cancela la espera. Cero cambios de protocolo.
 
 ## Validación pendiente (no es código)
 

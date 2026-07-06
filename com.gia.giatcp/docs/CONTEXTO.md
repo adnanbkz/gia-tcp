@@ -294,8 +294,13 @@ Arreglos aplicados:
   instalación no lo requiere).
 - **Timeouts (13):** live accept 60 s/read 15 s; `tcpc__rtCalib` 6×10 s; servidor 5512
   120 s por lectura (el robot debe completar cada primitiva de movimiento dentro de eso).
-- **releases/**: una `.urcap` por versión commiteada (v2 prioridad alta … v6 min/max+previous).
+- **releases/**: una `.urcap` por versión commiteada (v2 prioridad alta … v8 referenciado pasivo).
 - Tests: 39 verdes (parseInit min/max ×2, runner asimétrico ×2, más los previos).
+- **Referenciado pasivo en modo Local (entrada 20):** "Iniciar referenciado" en Local ya no da
+  error: registra `ReferencingListener` en la contribución y espera a que un programa con nodo
+  GIA TCP + "Guardar como referencia" (Play) persista por el sink 5512; al llegar el resultado
+  del TCP esperado, el paso se marca completado (`WIZ_REF_PASSIVE_WAIT/DONE`). Parar cancela.
+  Es la solución al robot del usuario (pendant 3PE sin Remote Control).
 
 **Pendientes menores:** queda por decidir si migrar wizard y repetibilidad al stack nuevo; el
 ajuste RX/RY del stack nuevo es single-shot (los parámetros `iterator`/`accuracyDeg` del wizard

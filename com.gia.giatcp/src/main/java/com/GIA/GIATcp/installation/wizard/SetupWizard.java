@@ -335,7 +335,10 @@ public class SetupWizard extends JPanel {
 		refStart.setText(t.t("WIZ_START_REFERENCING"));
 		refStart.addActionListener(e -> onReferencing());
 		JButton stop = new JButton(t.t("BTN_STOP"));
-		stop.addActionListener(e -> contribution.stopCalibration());
+		stop.addActionListener(e -> {
+			cancelPassiveReferencing();
+			contribution.stopCalibration();
+		});
 		buttons.add(refStart);
 		buttons.add(stop);
 		buttons.setMaximumSize(new Dimension(Integer.MAX_VALUE, buttons.getPreferredSize().height));
@@ -501,15 +504,12 @@ public class SetupWizard extends JPanel {
 			@Override
 			public void run() {
 				if (Boolean.FALSE.equals(contribution.isInRemoteControl())) {
+					// Local mode: injection is blocked, so switch to PASSIVE referencing —
+					// wait for a program-run (Play) with persist to feed the 5512 sink.
 					SwingUtilities.invokeLater(new Runnable() {
 						@Override
 						public void run() {
-							refStatus.setText(t.t("REF_LOCAL_MODE"));
-							refStart.setEnabled(true);
-							if (contribution.isErrInterrupt()) {
-								JOptionPane.showMessageDialog(SetupWizard.this, t.t("REF_LOCAL_MODE"),
-										t.t("WIZ_START_REFERENCING"), JOptionPane.WARNING_MESSAGE);
-							}
+							startPassiveReferencing();
 						}
 					});
 					return;
@@ -528,6 +528,40 @@ public class SetupWizard extends JPanel {
 				});
 			}
 		}, "gia-tcp-referencing").start();
+	}
+
+	/**
+	 * Passive referencing for Local mode (the only path on robots that cannot use Remote
+	 * Control, e.g. 3PE pendants): instead of injecting motion, the wizard waits for a
+	 * program run with a GIA TCP node ("Save as installation reference" + Play) to feed
+	 * the CalibrationServer sink, and completes this step when the result arrives.
+	 * The Stop button cancels the wait.
+	 */
+	private void startPassiveReferencing() {
+		final int waitId = tcp.id;
+		refStatus.setText(t.t("WIZ_REF_PASSIVE_WAIT", tcp.name));
+		refStart.setEnabled(false);
+		contribution.setReferencingListener(new InstallationContribution.ReferencingListener() {
+			@Override
+			public void onReferenced(int tcpId) {
+				if (tcpId != waitId) {
+					return; // some other TCP was referenced; keep waiting for ours
+				}
+				contribution.setReferencingListener(null);
+				tcp = contribution.getSelectedTcp();
+				refStatus.setText(t.t("WIZ_REF_PASSIVE_DONE"));
+				refStart.setEnabled(true);
+			}
+		});
+	}
+
+	/** Cancels the wait (Stop button / leaving the step) and re-enables the start button. */
+	private void cancelPassiveReferencing() {
+		contribution.setReferencingListener(null);
+		if (!refStart.isEnabled()) {
+			refStart.setEnabled(true);
+			refStatus.setText(" ");
+		}
 	}
 
 	/**

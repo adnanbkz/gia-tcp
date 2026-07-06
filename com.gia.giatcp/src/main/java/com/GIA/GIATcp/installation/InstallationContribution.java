@@ -80,6 +80,22 @@ public class InstallationContribution implements InstallationNodeContribution, C
 	}
 
 	/**
+	 * Callback the Setup wizard registers while passively waiting for a program-run
+	 * referencing (Local mode, where "Start referencing" cannot inject motion). Fired on
+	 * the EDT after the result has been persisted.
+	 */
+	public interface ReferencingListener {
+		void onReferenced(int tcpId);
+	}
+
+	private volatile ReferencingListener referencingListener;
+
+	/** Registers (or clears, with null) the passive-referencing callback. Last one wins. */
+	public void setReferencingListener(ReferencingListener l) {
+		this.referencingListener = l;
+	}
+
+	/**
 	 * Persists a calibration measured by a running program (Play). Marshals to the EDT
 	 * because it writes the DataModel and refreshes the view. {@link CalibrationResultSink}.
 	 */
@@ -92,6 +108,10 @@ public class InstallationContribution implements InstallationNodeContribution, C
 				try {
 					store.setCalibrationResult(tcpId, correctionSi, diameterMm, measuredPoseSi);
 					view.refresh();
+					ReferencingListener l = referencingListener;
+					if (l != null) {
+						l.onReferenced(tcpId);
+					}
 				} catch (RuntimeException e) {
 					logger.warn("Failed to store referencing result for TCP {}", tcpId, e);
 				}
