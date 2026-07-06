@@ -59,13 +59,23 @@ public final class TCPCalibrationRunner {
 		double[] correctedTcp = TCPCalibrationMaths.correctedTcp(s.refTcp, correction);
 		double diameterMm = centre.diameterM * 1000.0 + s.diamOffsetMm;
 
-		TCPCalibrationResult.Status status = TCPCalibrationMaths.withinTol(correction, s.tolXYZm)
+		// XYZ band: asymmetric Min/Max when provided (CAPTRON), else the symmetric +/- band.
+		boolean okXYZ = s.tolMinXYZm != null && s.tolMaxXYZm != null
+				? TCPCalibrationMaths.withinTolAsym(correction, s.tolMinXYZm, s.tolMaxXYZm)
+				: TCPCalibrationMaths.withinTol(correction, s.tolXYZm);
+		TCPCalibrationResult.Status status = okXYZ
 				? TCPCalibrationResult.Status.OK : TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
 		// Diameter band (CAPTRON parity): a wrong/bent tool can pass XYZ and still probe a
 		// diameter far off the expected one. Only checked when nominal and band are known.
-		if (status == TCPCalibrationResult.Status.OK && s.diamTolMm > 0 && s.diamNominalMm > 0
-				&& !TCPCalibrationMaths.withinTolVal(diameterMm, s.diamNominalMm, s.diamTolMm)) {
-			status = TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
+		if (status == TCPCalibrationResult.Status.OK && s.diamNominalMm > 0) {
+			double dev = diameterMm - s.diamNominalMm;
+			boolean asymDiam = s.diamTolMinMm != 0 || s.diamTolMaxMm != 0;
+			boolean outDiam = asymDiam
+					? dev < s.diamTolMinMm || dev > s.diamTolMaxMm
+					: s.diamTolMm > 0 && !TCPCalibrationMaths.withinTolVal(diameterMm, s.diamNominalMm, s.diamTolMm);
+			if (outDiam) {
+				status = TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
+			}
 		}
 
 		// 4. Optional orientation: try a higher circle first, then a lower one.

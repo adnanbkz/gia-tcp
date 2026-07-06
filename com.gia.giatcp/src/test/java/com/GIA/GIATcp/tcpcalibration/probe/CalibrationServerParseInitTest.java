@@ -81,6 +81,30 @@ class CalibrationServerParseInitTest {
 	}
 
 	@Test
+	void lineWithoutMinMaxTailLeavesAsymBandsNull() {
+		String line = "INIT;" + POSES + ";15;1;1;1;0;5;10;10;0.5;3;0;2;16.2;0.4,0.5,0.6,0,0,0";
+		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
+		assertNull(s.tolMinXYZm, "no Min/Max tail -> symmetric band");
+		assertNull(s.tolMaxXYZm);
+	}
+
+	@Test
+	void newLineParsesAsymmetricMinMaxBands() {
+		// + tolMinX;tolMaxX;tolMinY;tolMaxY;tolMinZ;tolMaxZ;tolMinD;tolMaxD (mm)
+		String line = "INIT;" + POSES + ";15;1;1;1;0;5;10;10;0.5;3;0;2;16.2;0.4,0.5,0.6,0,0,0"
+				+ ";-0.5;1;-0.6;1.2;-0.7;1.4;-1;3";
+		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
+		assertEquals(-0.0005, s.tolMinXYZm[0], 1e-12);
+		assertEquals(0.001, s.tolMaxXYZm[0], 1e-12);
+		assertEquals(-0.0006, s.tolMinXYZm[1], 1e-12);
+		assertEquals(0.0012, s.tolMaxXYZm[1], 1e-12);
+		assertEquals(-0.0007, s.tolMinXYZm[2], 1e-12);
+		assertEquals(0.0014, s.tolMaxXYZm[2], 1e-12);
+		assertEquals(-1.0, s.diamTolMinMm, 1e-9);
+		assertEquals(3.0, s.diamTolMaxMm, 1e-9);
+	}
+
+	@Test
 	void malformedReturnsNull() {
 		assertNull(CalibrationServer.parseInit(null));
 		assertNull(CalibrationServer.parseInit("NOPE;1;2;3"));

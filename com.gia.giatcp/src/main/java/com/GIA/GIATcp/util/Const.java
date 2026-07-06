@@ -115,8 +115,11 @@ public final class Const {
 	public static final String K_ACT_CHILD_DONE = "actChildDone"; // boolean: If-Error child inserted
 	public static final String K_ACT_USE_CUSTOM_VAR = "actUseCustomVar"; // boolean
 	public static final String K_ACT_CUSTOM_VAR = "actCustomVar";        // String
-	// tolerances: a single symmetric +/- allowed deviation per axis (user-friendly).
+	// tolerances: legacy single symmetric +/- band per axis; kept because it seeds the
+	// defaults of the asymmetric Min/Max keys (CAPTRON-style) that replaced it in the UI.
 	public static final String K_TOL = "actTol%s"; // %s in {X,Y,Z,D}; +/- tolerance in mm
+	public static final String K_TOL_MIN = "actTolMin%s"; // mm, typically negative
+	public static final String K_TOL_MAX = "actTolMax%s"; // mm, typically positive
 	public static final String K_TOL_MAXRX = "actTolMaxRX";
 	public static final String K_TOL_MAXRY = "actTolMaxRY";
 

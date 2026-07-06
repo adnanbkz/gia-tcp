@@ -66,8 +66,11 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 	private final JRadioButton rAngle = new JRadioButton();
 	private final JTextField fOffZ = new JTextField(8);
 
-	private final JTextField[] tolField = {
-			new JTextField(8), new JTextField(8), new JTextField(8), new JTextField(8) };
+	private final JTextField[] tolMinField = {
+			new JTextField(6), new JTextField(6), new JTextField(6), new JTextField(6) };
+	private final JTextField[] tolMaxField = {
+			new JTextField(6), new JTextField(6), new JTextField(6), new JTextField(6) };
+	private final JLabel[] tolPrevLabel = { new JLabel(), new JLabel(), new JLabel(), new JLabel() };
 
 	private final JRadioButton rDefaultVar = new JRadioButton();
 	private final JRadioButton rCustomVar = new JRadioButton();
@@ -341,28 +344,41 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		JPanel p = new JPanel(new BorderLayout(0, 8));
 		p.add(new JLabel(t.t("ACT_TOL_INFO")), BorderLayout.NORTH);
 
-		// Framed box with the per-axis fields, mirroring CAPTRON's boxed tolerances.
+		// Framed box mirroring CAPTRON's tolerance group: asymmetric Min/Max per axis plus
+		// a "Previous" column with the last measured deviation, to tune bands on real data.
 		JPanel box = new JPanel(new GridBagLayout());
 		box.setBorder(BorderFactory.createTitledBorder(t.t("ACT_TOL_HEADER")));
 		GridBagConstraints gc = new GridBagConstraints();
 		gc.insets = new Insets(6, 12, 6, 12);
 		gc.anchor = GridBagConstraints.WEST;
+		gc.gridy = 0;
+		gc.gridx = 1;
+		box.add(Ui.bold(t.t("ACT_TOL_MIN")), gc);
+		gc.gridx = 2;
+		box.add(Ui.bold(t.t("ACT_TOL_MAX")), gc);
+		gc.gridx = 4;
+		box.add(Ui.bold(t.t("ACT_TOL_PREV")), gc);
 		for (int i = 0; i < TOL_AXES.length; i++) {
 			final String axis = TOL_AXES[i];
+			gc.gridy = i + 1;
 			gc.gridx = 0;
-			gc.gridy = i;
 			gc.weightx = 0;
 			gc.fill = GridBagConstraints.NONE;
 			box.add(Ui.bold("D".equals(axis) ? "Ø" : axis), gc);
 			gc.gridx = 1;
 			gc.weightx = 1;
 			gc.fill = GridBagConstraints.HORIZONTAL;
-			Ui.wireDouble(tolField[i], kf(), v -> provider.get().setTol(axis, v));
-			box.add(tolField[i], gc);
+			Ui.wireDouble(tolMinField[i], kf(), v -> provider.get().setTolMin(axis, v));
+			box.add(tolMinField[i], gc);
 			gc.gridx = 2;
+			Ui.wireDouble(tolMaxField[i], kf(), v -> provider.get().setTolMax(axis, v));
+			box.add(tolMaxField[i], gc);
+			gc.gridx = 3;
 			gc.weightx = 0;
 			gc.fill = GridBagConstraints.NONE;
 			box.add(new JLabel("mm"), gc);
+			gc.gridx = 4;
+			box.add(tolPrevLabel[i], gc);
 		}
 		JPanel holder = new JPanel(new BorderLayout());
 		holder.add(box, BorderLayout.NORTH);
@@ -465,8 +481,12 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		rAngle.setSelected(c.isAdjustAngle());
 		fOffZ.setText(String.valueOf(c.getOffsetZ()));
 
+		double[] prev = CalibrationServer.lastResultFor(c.getTcpId());
 		for (int i = 0; i < TOL_AXES.length; i++) {
-			tolField[i].setText(String.valueOf(c.getTol(TOL_AXES[i])));
+			tolMinField[i].setText(String.valueOf(c.getTolMin(TOL_AXES[i])));
+			tolMaxField[i].setText(String.valueOf(c.getTolMax(TOL_AXES[i])));
+			// Previous: X/Y/Z show the last deviation; the Ø row shows the last probed diameter.
+			tolPrevLabel[i].setText(prev == null ? "---" : String.format("%.2f", prev[i]));
 		}
 
 		rDefaultVar.setSelected(!c.isUseCustomVar());

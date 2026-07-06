@@ -48,6 +48,27 @@ public final class CalibrationServer {
 		resultSink = sink;
 	}
 
+	/**
+	 * Last measured deviation per TCP slot ([xMm, yMm, zMm, diamMm]), fed by runtime
+	 * sessions and the live test. Backs the node's "Previous" column (CAPTRON shows the
+	 * last deviation next to the Min/Max bands so users can tune them with real data).
+	 */
+	private static final java.util.concurrent.ConcurrentHashMap<Integer, double[]> LAST_RESULT =
+			new java.util.concurrent.ConcurrentHashMap<Integer, double[]>();
+
+	public static void recordResult(int tcpId, TCPCalibrationResult r) {
+		if (tcpId <= 0 || r == null || r.correction == null) {
+			return;
+		}
+		LAST_RESULT.put(tcpId, new double[] {
+				r.correction[0] * 1000.0, r.correction[1] * 1000.0, r.correction[2] * 1000.0, r.diameterMm });
+	}
+
+	/** [xMm, yMm, zMm, diamMm] of the last measured run for this TCP slot, or null. */
+	public static double[] lastResultFor(int tcpId) {
+		return LAST_RESULT.get(tcpId);
+	}
+
 	private volatile boolean running;
 	private ServerSocket serverSocket;
 	private Thread acceptThread;
@@ -111,6 +132,7 @@ public final class CalibrationServer {
 			TCPCalibrationResult result = new TCPCalibrationRunner(transport).calibrate(spec);
 			transport.sendDone(result);
 			logger.debug("calibration server: session result {}", result.status);
+			recordResult(spec.tcpId, result);
 			maybePersist(spec, result);
 		} catch (IOException e) {
 			logger.debug("calibration server session error", e);
@@ -157,6 +179,19 @@ public final class CalibrationServer {
 			}
 			if (t.length >= 17) {
 				s.pStart = CalibCsv.parsePoseCsv(t[16]);
+			}
+			// Asymmetric Min/Max bands (mm on the wire): tolMinX;tolMaxX;...;tolMinD;tolMaxD.
+			if (t.length >= 25) {
+				s.tolMinXYZm = new double[] {
+						Double.parseDouble(t[17].trim()) / 1000.0,
+						Double.parseDouble(t[19].trim()) / 1000.0,
+						Double.parseDouble(t[21].trim()) / 1000.0 };
+				s.tolMaxXYZm = new double[] {
+						Double.parseDouble(t[18].trim()) / 1000.0,
+						Double.parseDouble(t[20].trim()) / 1000.0,
+						Double.parseDouble(t[22].trim()) / 1000.0 };
+				s.diamTolMinMm = Double.parseDouble(t[23].trim());
+				s.diamTolMaxMm = Double.parseDouble(t[24].trim());
 			}
 			return s;
 		} catch (RuntimeException e) {

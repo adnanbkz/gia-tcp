@@ -33,11 +33,20 @@ public final class TCPCalibrationSpec {
 
 	/** XYZ tolerance band (m): the correction must stay within +/- these. */
 	public double[] tolXYZm = { 0.999, 0.999, 0.999 };
+	/**
+	 * Asymmetric XYZ band (m, CAPTRON Min/Max): correction must sit in [min[i], max[i]].
+	 * Null = fall back to the symmetric {@link #tolXYZm}.
+	 */
+	public double[] tolMinXYZm;
+	public double[] tolMaxXYZm;
 	public double diamOffsetMm = 0.0;
 	/** Expected tool diameter (mm): real diameter if configured, else the referenced one. */
 	public double diamNominalMm = 0.0;
 	/** +/- band (mm) around {@link #diamNominalMm}; 0 disables the diameter check. */
 	public double diamTolMm = 0.0;
+	/** Asymmetric diameter band (mm) around nominal; both 0 = use the symmetric band. */
+	public double diamTolMinMm = 0.0;
+	public double diamTolMaxMm = 0.0;
 
 	public boolean adjustAngle = false;
 	/** How much to raise (+) / lower (-) the orientation circle vs the XY plane (mm). */

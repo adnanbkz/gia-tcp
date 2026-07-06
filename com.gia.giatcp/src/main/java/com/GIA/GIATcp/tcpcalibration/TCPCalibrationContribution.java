@@ -273,7 +273,7 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		edit(() -> model.set(Const.K_ACT_CUSTOM_VAR, v));
 	}
 
-	/** Symmetric +/- allowed deviation (mm) for an axis in {X,Y,Z} or the diameter ("D"). */
+	/** Legacy symmetric +/- band (mm); still seeds the Min/Max defaults of older nodes. */
 	public double getTol(String axis) {
 		return model.get(String.format(Const.K_TOL, axis),
 				"D".equals(axis) ? Const.DEF_TOL_DIAM_MM : Const.DEF_TOL_MM);
@@ -281,6 +281,24 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 
 	public void setTol(final String axis, final double v) {
 		edit(() -> model.set(String.format(Const.K_TOL, axis), Math.abs(v)));
+	}
+
+	/** Lower allowed deviation (mm, usually negative) for X/Y/Z or the diameter ("D"). */
+	public double getTolMin(String axis) {
+		return model.get(String.format(Const.K_TOL_MIN, axis), -getTol(axis));
+	}
+
+	public void setTolMin(final String axis, final double v) {
+		edit(() -> model.set(String.format(Const.K_TOL_MIN, axis), v));
+	}
+
+	/** Upper allowed deviation (mm, usually positive) for X/Y/Z or the diameter ("D"). */
+	public double getTolMax(String axis) {
+		return model.get(String.format(Const.K_TOL_MAX, axis), getTol(axis));
+	}
+
+	public void setTolMax(final String axis, final double v) {
+		edit(() -> model.set(String.format(Const.K_TOL_MAX, axis), v));
 	}
 
 	public List<String> getVariableNames() {
@@ -409,10 +427,23 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 				? (p.realDiameterMm > 0 ? p.realDiameterMm : tcp.diameterMm) : 0.0;
 		String tolD = persist ? "0" : UrScript.num(getTol("D"));
 
+		// Asymmetric Min/Max bands (CAPTRON): referencing must never fail on the band.
+		String tolMinX = persist ? "-999" : UrScript.num(getTolMin("X"));
+		String tolMaxX = persist ? "999" : UrScript.num(getTolMax("X"));
+		String tolMinY = persist ? "-999" : UrScript.num(getTolMin("Y"));
+		String tolMaxY = persist ? "999" : UrScript.num(getTolMax("Y"));
+		String tolMinZ = persist ? "-999" : UrScript.num(getTolMin("Z"));
+		String tolMaxZ = persist ? "999" : UrScript.num(getTolMax("Z"));
+		boolean diamBand = !persist && tcp.calibrated;
+		String tolMinD = diamBand ? UrScript.num(getTolMin("D")) : "0";
+		String tolMaxD = diamBand ? UrScript.num(getTolMax("D")) : "0";
+
 		// Handshake line the Java CalibrationServer parses (mm + bare-CSV poses).
-		// INIT;pRef;refTcp;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm;tcpId;persist;tolDmm;diamNomMm;pStart
+		// INIT;pRef;refTcp;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm;tcpId;persist;tolDmm;diamNomMm;pStart;tolMinX;tolMaxX;tolMinY;tolMaxY;tolMinZ;tolMaxZ;tolMinD;tolMaxD
 		// pRef (correction reference) is the pose measured at referencing when there is one
 		// (CAPTRON h()); the circle still runs around the taught centre (pStart, CAPTRON j()).
+		// The legacy symmetric fields stay for wire compatibility; the server prefers the
+		// trailing Min/Max fields when present.
 		String initLine = "INIT;" + UrScript.poseCsv(tcp.correctionRefPose()) + ";" + UrScript.poseCsv(refPose)
 				+ ";" + UrScript.num(p.radiusMm) + ";" + tolX + ";" + tolY
 				+ ";" + tolZ + ";" + adj + ";" + UrScript.num(getOffsetZ())
@@ -420,7 +451,9 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 				+ ";" + UrScript.num(diamOffMm)
 				+ ";" + getTcpId() + ";" + (persist ? 1 : 0)
 				+ ";" + tolD + ";" + UrScript.num(diamNomMm)
-				+ ";" + UrScript.poseCsv(tcp.centerPose);
+				+ ";" + UrScript.poseCsv(tcp.centerPose)
+				+ ";" + tolMinX + ";" + tolMaxX + ";" + tolMinY + ";" + tolMaxY
+				+ ";" + tolMinZ + ";" + tolMaxZ + ";" + tolMinD + ";" + tolMaxD;
 
 		writer.appendLine("# --- GIA TCP (runtime calibration, maths in Java) ---");
 		// CAPTRON parity: Check/Validate must not leak the reference TCP into the rest of

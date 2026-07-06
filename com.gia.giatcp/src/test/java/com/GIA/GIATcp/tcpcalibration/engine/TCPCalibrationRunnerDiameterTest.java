@@ -87,4 +87,31 @@ class TCPCalibrationRunnerDiameterTest {
 		assertEquals(TCPCalibrationResult.Status.OK, r.status);
 		assertEquals(8.0, r.diameterMm, 1e-9);
 	}
+
+	// ---- asymmetric Min/Max bands (CAPTRON) ----
+
+	@Test
+	void asymmetricDiameterBandIsDirectional() {
+		TCPCalibrationSpec s = spec();
+		s.diamNominalMm = 3.0; // probed 4.0 -> deviation +1
+		s.diamTolMinMm = -0.5;
+		s.diamTolMaxMm = 1.5;
+		assertEquals(TCPCalibrationResult.Status.OK, run(s).status);
+		s.diamTolMaxMm = 0.5; // same deviation, tighter upper bound
+		assertEquals(TCPCalibrationResult.Status.OUT_OF_TOLERANCE, run(s).status);
+	}
+
+	@Test
+	void asymmetricXyzBandOverridesTheSymmetricOne() {
+		TCPCalibrationSpec s = spec();
+		s.tolXYZm = new double[] { 0.999, 0.999, 0.999 }; // symmetric says OK
+		// correction is ~0 on X/Y and +5 mm on Z (pRef at origin, beam plane at -5 mm):
+		// a tight band rejects it, proving the asym band takes precedence; widening only
+		// the upper Z bound accepts it again (directional).
+		s.tolMinXYZm = new double[] { -0.001, -0.001, -0.001 };
+		s.tolMaxXYZm = new double[] { 0.001, 0.001, 0.001 };
+		assertEquals(TCPCalibrationResult.Status.OUT_OF_TOLERANCE, run(s).status);
+		s.tolMaxXYZm[2] = 0.010;
+		assertEquals(TCPCalibrationResult.Status.OK, run(s).status);
+	}
 }

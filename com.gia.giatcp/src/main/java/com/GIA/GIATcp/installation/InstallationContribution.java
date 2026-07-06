@@ -467,6 +467,7 @@ public class InstallationContribution implements InstallationNodeContribution, C
 	 */
 	public TCPCalibrationResult runTestCalibration(GiaTcp tcp) {
 		TCPCalibrationResult r = new TCPCalibrationRunner(new SecondaryProbeTransport()).calibrate(buildTestSpec(tcp));
+		CalibrationServer.recordResult(tcp.id, r);
 		boolean measured = r.status == TCPCalibrationResult.Status.OK
 				|| r.status == TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
 		if (measured && r.correction != null) {

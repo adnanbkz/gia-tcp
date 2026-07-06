@@ -219,6 +219,19 @@ public final class TCPCalibrationMaths {
 		return Math.abs(measured - nominal) <= tol;
 	}
 
+	/**
+	 * Asymmetric XYZ band (CAPTRON Min/Max): each correction axis must sit within
+	 * [min[i], max[i]] — e.g. accepting a longer wire more readily than a shorter one.
+	 */
+	public static boolean withinTolAsym(double[] correction, double[] min, double[] max) {
+		for (int i = 0; i < 3; i++) {
+			if (correction[i] < min[i] || correction[i] > max[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	// ==================================================================
 	// Low-level homogeneous-transform helpers (4x4)
 	// ==================================================================
