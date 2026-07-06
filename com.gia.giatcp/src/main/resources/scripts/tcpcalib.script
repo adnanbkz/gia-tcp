@@ -234,6 +234,7 @@ def tcpc__lightCheck(pRef, in1, in2, zImmerse, acc, vel):
       end
       return 6
     elif (tcpc__mStatus > 1):
+      kill h
       return 7
     end
     sync()
