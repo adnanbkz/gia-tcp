@@ -31,8 +31,12 @@ public final class SecondaryProbeTransport implements ProbeTransport {
 	private static final Logger logger = LogManager.getLogger(MethodHandles.lookup().lookupClass());
 	private static final String SCRIPT_RESOURCE = "/scripts/tcpcalib.script";
 	private static final int RETURN_PORT = 5511;
-	private static final int ACCEPT_TIMEOUT_MS = 120000;
-	private static final int READ_TIMEOUT_MS = 120000;
+	// The robot connects back only AFTER finishing the probe motion of the primitive, so
+	// accept must cover the slowest motion (slow speed circle / Z search ~ tens of seconds).
+	// The reply line itself arrives immediately after the connect. Short enough that a
+	// wiring/mode problem does not leave the operator staring at a frozen screen for 2 min.
+	private static final int ACCEPT_TIMEOUT_MS = 60000;
+	private static final int READ_TIMEOUT_MS = 15000;
 
 	private static volatile String cachedLib;
 

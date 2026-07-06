@@ -267,8 +267,10 @@ def tcpc__rtCalib(host, port, initLine, in1, in2, radius, acc, vel, overrun, zSe
   tcpc__rtSend(initLine)
   local done = False
   local misses = 0
-  while ((not done) and (misses < 15)):
-    local m = socket_read_ascii_float(9, "giatcp", 20)
+  # 6 x 10 s: the server computes in milliseconds, so waiting longer only makes sense
+  # when it is down (URCap not loaded) - fail within a minute instead of five.
+  while ((not done) and (misses < 6)):
+    local m = socket_read_ascii_float(9, "giatcp", 10)
     if (m[0] == 9):
       misses = 0
       local op = m[1]
@@ -289,4 +291,54 @@ def tcpc__rtCalib(host, port, initLine, in1, in2, radius, acc, vel, overrun, zSe
   end
   socket_close("giatcp")
   return done
+end
+
+# ---------------------------------------------------------------------------
+# Public helpers (CAPTRON cap_* parity): call them from program expressions,
+# If conditions or script nodes after a GIA TCP action. ASCII-only strings.
+# ---------------------------------------------------------------------------
+def gia_isActionOk():
+  return (tcpc__rtStatus == 0)
+end
+
+def gia_getStatus():
+  return tcpc__rtStatus
+end
+
+def gia_getTCP():
+  return tcpc__rtTcp
+end
+
+def gia_getDiameterMM():
+  return tcpc__rtDiam
+end
+
+# Applies the last corrected TCP (only if the action ended OK). Returns True on apply.
+def gia_activateTCP():
+  if (tcpc__rtStatus == 0):
+    set_tcp(tcpc__rtTcp)
+    return True
+  end
+  return False
+end
+
+def gia_getStatusMsg():
+  if (tcpc__rtStatus == 0):
+    return "OK"
+  elif (tcpc__rtStatus == 1):
+    return "Sin respuesta del robot / no robot reply"
+  elif (tcpc__rtStatus == 2):
+    return "El circulo no cruzo ambos haces / no intersect"
+  elif (tcpc__rtStatus == 3):
+    return "Busqueda Z fallida / search Z failed"
+  elif (tcpc__rtStatus == 4):
+    return "Fuera de tolerancia / out of tolerance"
+  elif (tcpc__rtStatus == 5):
+    return "Orientacion no posible / orientation not possible"
+  elif (tcpc__rtStatus == 6):
+    return "No corta ambos haces en la referencia / input low at reference"
+  elif (tcpc__rtStatus == 7):
+    return "Inmersion fallida: herramienta desgastada o ausente / immerse failed"
+  end
+  return "Estado " + to_str(tcpc__rtStatus)
 end

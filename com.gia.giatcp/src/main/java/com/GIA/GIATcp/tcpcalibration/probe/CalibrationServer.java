@@ -33,7 +33,9 @@ public final class CalibrationServer {
 	private static final Logger logger = LogManager.getLogger(MethodHandles.lookup().lookupClass());
 
 	public static final int PORT = 5512;
-	private static final int SESSION_TIMEOUT_MS = 180000;
+	// Per-read timeout for robot replies: each probe primitive (circle / Z search) must
+	// finish its motion within this. 120 s covers the slowest speed setting with margin.
+	private static final int SESSION_TIMEOUT_MS = 120000;
 
 	/**
 	 * Sink the installation node registers so a program-run calibration can persist its
