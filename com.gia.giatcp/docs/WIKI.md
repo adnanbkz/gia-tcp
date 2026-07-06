@@ -70,9 +70,18 @@ El nodo activo es `GIA TCP`.
 - Referencia de pose (semantica CAPTRON): la correccion se mide contra la pose capturada en el
   referenciado (no contra el centro enseñado); el centro enseñado solo es el punto de arranque
   del sondeo. Re-enseñar el centro borra la referencia y hay que volver a referenciar.
-- Tolerancias: banda +/- por eje X/Y/Z y banda de diametro. El diametro sondeado se corrige
-  con `real - referenciado` (semantica CAPTRON; el referenciado guarda la medida cruda) y se
+- Tolerancias: bandas [Min, Max] asimetricas por eje X/Y/Z y para el diametro (p. ej. aceptar
+  hilo largo con mas margen que hilo corto). El diametro sondeado se corrige con
+  `real - referenciado` (semantica CAPTRON; el referenciado guarda la medida cruda) y se
   compara contra el diametro real configurado, o contra el referenciado si no hay real.
+  La columna "Anterior" muestra la ultima desviacion medida (X/Y/Z) y el ultimo diametro
+  sondeado de ese TCP.
+- Funciones script publicas (usables en expresiones e If): `gia_isActionOk()`,
+  `gia_getStatus()`, `gia_getStatusMsg()`, `gia_getTCP()`, `gia_getDiameterMM()`,
+  `gia_activateTCP()`.
+- Assignment: "Mover a inicio" (pose referenciada en Check/Validate, centro en Recalibrate) y
+  "Mover a aproximacion" con la pantalla guiada; si no se puede activar el TCP de referencia
+  (modo Local) pide confirmacion.
 - Recalibrate: mide desde el centro ensenado (sin chequeo previo: tras un cambio de boquilla la
   herramienta puede estar lejos), devuelve el TCP corregido, lo asigna a variable y
   opcionalmente ejecuta `set_tcp`.

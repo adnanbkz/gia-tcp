@@ -20,42 +20,23 @@
 - ~~10. Aproximación rápida en dos tramos~~ (bonus): primer tramo a 80/60·factor, final a
   velocidad de sondeo; anclaje del approach en h() (Check/Validate) o j() (Recalibrate).
 
-## Prioridad media (robustez / ergonomía)
+## Aplicadas (2026-07-07) — prioridad media completa
 
-6. **Límites de teclado por parámetro (validación de rangos en el wizard).** CAPTRON valida cada
-   campo con rangos por variante de sensor (visto en `tcp/inst/A/D.java`: search Z 10–999,
-   overrun 5–45; radio/velocidad/aceleración por modelo en `tcp/inst/B/A.java`). Nuestro wizard
-   acepta cualquier número; con radio < regla del seno de 45° o overrun bajo, el fallo aparece
-   después y lejos de la causa. Añadir validación con la regla física documentada en `Const`
-   (incluida la advertencia si `realDiameterMm` configurado exige radio ≥ ~13–16 mm por boquilla).
-
-7. **Tolerancias min/max asimétricas.** CAPTRON define Min y Max por eje (X/Y/Z/Ø, defaults
-   -999/999), lo que permite bandas asimétricas (p. ej. aceptar hilo más largo que corto).
-   Nosotros solo tenemos ±banda. Modelo en `tcp_action/A.java` (arrays `L.S()`/`L.K()`).
-
-8. **Columna "Previous" en la pestaña de tolerancias del nodo.** CAPTRON muestra junto a Min/Max
-   la última desviación medida por ese nodo (XYZ, Ø y ángulo), lo que facilita ajustar bandas
-   con datos reales. Nosotros solo mostramos la corrección en el Overview de instalación.
-
-9. **Botones "Move Start" / "Move Approach" en el nodo (pestaña Assignment).** Utilidad de puesta
-   en marcha de CAPTRON: llevar el robot a la posición de inicio (intersección con corrección
-   aplicada para Check/Validate, centro enseñado para Recalibrate) o a la de aproximación.
-   Nosotros solo tenemos el mover-al-centro del flujo guiado del test.
-
-11. **Funciones script públicas (`gia_*`).** CAPTRON expone `cap_isActionOk`, `cap_getStatus`,
-    `cap_getStatusMsg`, `cap_getCorrectionMM`, `cap_getDiameterMM`, `cap_activateTCP`,
-    `cap_setTCP` para usarlas en expresiones/If del programa. Nosotros dejamos globals crudas
-    (`giaTcpOk`, `tcpc__rtStatus`, `tcpc__rtTcp`, `tcpc__rtDiam`) sin envoltorios con nombre ni
-    mensaje de estado legible.
-
-12. **Escrituras del DataModel fuera de UndoableChanges.** `TcpStore.setCalibrationResult` (y el
-    sink desde el servidor 5512) escriben el modelo directamente vía `invokeLater`. Funciona hoy,
-    pero algunas versiones de PolyScope lo penalizan; endurecer con
-    `UndoRedoManager.recordChanges` sería lo canónico.
-
-13. **Timeout agregado del runtime demasiado largo.** `tcpc__rtCalib` tolera 15 misses × 20 s
-    (hasta 5 min) y los sockets live esperan 120 s: un fallo de red deja al operario mirando la
-    pantalla demasiado tiempo. Ajustar a valores más cortos con reintento explícito.
+- ~~6. Validación de rangos en el wizard~~: clamp por parámetro (estilo CAPTRON) + aviso
+  físico del radio mínimo (`Const.minRadiusForTool`).
+- ~~7. Tolerancias min/max asimétricas~~: bandas [Mín, Máx] por eje y Ø en el nodo; INIT
+  ampliado con 8 campos de cola; runner con `withinTolAsym` y banda direccional de Ø.
+- ~~8. Columna "Previous"~~: última desviación X/Y/Z y último Ø sondeado por TCP
+  (registro en `CalibrationServer`, alimentado por nodo runtime y test live).
+- ~~9. Move Start / Move Approach~~: botones en la pestaña Assignment con pantalla guiada
+  (h()/j() según acción + punto de aproximación); avisa si no puede activar el TCP de
+  referencia (modo Local).
+- ~~11. Funciones script `gia_*`~~: `gia_isActionOk`, `gia_getStatus`, `gia_getStatusMsg`,
+  `gia_getTCP`, `gia_getDiameterMM`, `gia_activateTCP`.
+- ~~12. UndoableChanges~~: verificado — todas las escrituras de nodos de PROGRAMA ya van en
+  `recordChanges`; las de instalación no lo requieren (PolyScope no tiene undo en
+  instalación) y van por el hilo UI. Cerrado sin cambios.
+- ~~13. Timeouts~~: live 60/15 s, rtCalib 6×10 s, servidor 120 s por lectura.
 
 ## Prioridad baja / decisiones de arquitectura
 

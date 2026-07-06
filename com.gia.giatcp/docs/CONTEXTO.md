@@ -271,10 +271,36 @@ Arreglos aplicados:
   el centro enseñado (j()).
 - Tests: 35 verdes (7 nuevos: `CalibCsvZParseTest`, `TCPCalibrationRunnerZFailureTest`).
 
+### 2026-07-07 — Prioridad media completa (items 6-13) + carpeta releases/
+
+- **Validación del wizard (6):** clamp por parámetro con reescritura del campo (rangos en
+  `Const`: radio 2-20, velocidad 5-100, acel 20-2000, overrun 5-45, search Z 3-50, Ø 0-25,
+  iter 1-10, offZ 1-20, precisión 0.05-5) + aviso del radio mínimo físico
+  (`Const.minRadiusForTool`: (Ø/2+1.5)/sen 45, hilo 1.2 si no hay Ø real).
+- **Min/Max asimétricos (7):** claves `actTolMin%s`/`actTolMax%s` (default ±simétrico legacy
+  → migración transparente); INIT +8 campos de cola `tolMinX..tolMaxD` (t[17..24], mm); el
+  servidor los prefiere y sin ellos cae al simétrico. Runner: `withinTolAsym` y banda de Ø
+  direccional (min/max ≠ 0 la activan; si no, el simétrico legacy).
+- **Previous (8):** `CalibrationServer.recordResult/lastResultFor` (mapa estático por tcpId,
+  [xMm,yMm,zMm,ØMm]) alimentado por sesiones runtime y `runTestCalibration`; la pestaña de
+  tolerancias lo muestra por fila (Ø en la fila Ø). Se refresca al abrir la vista.
+- **Move Start/Approach (9):** `actionStartPose()` (h()/j() según acción) y
+  `actionApproachPose()` (± Approach Z por `signedApproachZMm`); pantalla guiada
+  (`requestMove`); si `activateReferenceTcp` falla (Local), confirmación explícita porque la
+  pantalla apunta con el TCP activo actual.
+- **gia_* (11):** wrappers públicos en `tcpcalib.script` (ASCII only), incl.
+  `gia_getStatusMsg()` bilingüe ES/EN.
+- **UndoableChanges (12):** verificado y cerrado sin cambios (programa ya canónico;
+  instalación no lo requiere).
+- **Timeouts (13):** live accept 60 s/read 15 s; `tcpc__rtCalib` 6×10 s; servidor 5512
+  120 s por lectura (el robot debe completar cada primitiva de movimiento dentro de eso).
+- **releases/**: una `.urcap` por versión commiteada (v2 prioridad alta … v6 min/max+previous).
+- Tests: 39 verdes (parseInit min/max ×2, runner asimétrico ×2, más los previos).
+
 **Pendientes menores:** queda por decidir si migrar wizard y repetibilidad al stack nuevo; el
 ajuste RX/RY del stack nuevo es single-shot (los parámetros `iterator`/`accuracyDeg` del wizard
 solo los usa el stack legacy — la iteración con re-centrado queda para cuando se valide XYZ en
-hardware). Resto en `docs/MEJORAS_PENDIENTES.md`.
+hardware). Resto en `docs/MEJORAS_PENDIENTES.md` (baja: 14-17; validación: 18-19; propuesta 20).
 
 ---
 

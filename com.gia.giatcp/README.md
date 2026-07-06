@@ -42,7 +42,16 @@ URCap de GIA ROBOTICS para comprobar, validar y recalibrar el TCP de una herrami
 - Aproximacion en dos tramos: tramo rapido a `80/60 x factor` hasta el punto de aproximacion y
   tramo final a velocidad de sondeo (anclada en la pose referenciada para Check/Validate y en el
   centro ensenado para Recalibrate).
-- Tolerancias por eje X/Y/Z y de diametro (fila con el simbolo de diametro): Validate/Recalibrate fallan si la correccion o el diametro sondeado salen de banda.
+- Tolerancias por eje X/Y/Z y de diametro (fila con el simbolo de diametro): bandas [Min, Max]
+  asimetricas (paridad CAPTRON); Validate/Recalibrate fallan si la correccion o el diametro
+  sondeado salen de banda. La columna "Previous" muestra la ultima desviacion medida y el
+  ultimo diametro sondeado de ese TCP, para ajustar bandas con datos reales.
+- Pestaña Assignment: botones "Mover a inicio" / "Mover a aproximacion" (pantalla guiada de
+  PolyScope) como utilidades de puesta en marcha.
+- Funciones script publicas para expresiones/If del programa: gia_isActionOk(), gia_getStatus(),
+  gia_getStatusMsg(), gia_getTCP(), gia_getDiameterMM(), gia_activateTCP().
+- Los campos del wizard validan rangos al teclear (clamp estilo CAPTRON) y avisan si el radio
+  de sondeo queda por debajo del minimo fisico para el diametro real configurado.
 - Diametro (semantica CAPTRON): el referenciado guarda la medida cruda; en runtime se corrige con `diametro real - diametro referenciado` (si hay diametro real configurado) y se compara contra la banda.
 - Referencia de pose (semantica CAPTRON): el referenciado guarda la pose medida en el plano de haces; las calibraciones posteriores miden su correccion contra esa pose (no contra el centro enseñado a mano), asi el error del teach desaparece tras el primer referenciado. El circulo de sondeo sigue arrancando en el centro enseñado. Re-enseñar el centro invalida la referencia y obliga a re-referenciar.
 - Recalibrate puede escribir el TCP corregido en `giaActionTCP` o en una variable seleccionada, y opcionalmente aplicar `set_tcp`.
