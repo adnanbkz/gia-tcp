@@ -7,6 +7,7 @@ import com.GIA.GIATcp.installation.model.GiaTcp;
 import com.GIA.GIATcp.installation.model.IoOption;
 import com.GIA.GIATcp.installation.model.TcpVariant;
 import com.GIA.GIATcp.locale.Texts;
+import com.GIA.GIATcp.util.Const;
 import com.GIA.GIATcp.util.Ui;
 import com.ur.urcap.api.domain.userinteraction.keyboard.KeyboardInputFactory;
 
@@ -76,6 +77,7 @@ public class SetupWizard extends JPanel {
 	private final JTextField fIter = new JTextField(8);
 	private final JTextField fOffZ = new JTextField(8);
 	private final JTextField fAccuracy = new JTextField(8);
+	private final JLabel radiusWarn = new JLabel();
 	private final JLabel refStatus = new JLabel();
 	private final JButton refStart = new JButton();
 	private final JLabel doneImage = new JLabel();
@@ -242,41 +244,85 @@ public class SetupWizard extends JPanel {
 
 	private JPanel buildParamStep() {
 		KeyboardInputFactory kf = contribution.getApiProvider().getUserInterfaceAPI().getUserInteraction().getKeyboardInputFactory();
-		JPanel p = new JPanel(new GridLayout(0, 2, 6, 4));
-		addField(p, t.t("WIZ_RADIUS"), fRadius);
-		addField(p, t.t("WIZ_SPEED"), fSpeed);
-		addField(p, t.t("WIZ_ACCEL"), fAccel);
-		addField(p, t.t("WIZ_OVERRUN"), fOverrun);
-		addField(p, t.t("WIZ_SEARCH_Z"), fSearchZ);
-		p.add(new JLabel(""));
+		JPanel grid = new JPanel(new GridLayout(0, 2, 6, 4));
+		addField(grid, t.t("WIZ_RADIUS"), fRadius);
+		addField(grid, t.t("WIZ_SPEED"), fSpeed);
+		addField(grid, t.t("WIZ_ACCEL"), fAccel);
+		addField(grid, t.t("WIZ_OVERRUN"), fOverrun);
+		addField(grid, t.t("WIZ_SEARCH_Z"), fSearchZ);
+		grid.add(new JLabel(""));
 		cInvertZ.setText(t.t("WIZ_INVERT_Z"));
-		p.add(cInvertZ);
-		addField(p, t.t("WIZ_DIAMETER"), fDiameter);
+		grid.add(cInvertZ);
+		addField(grid, t.t("WIZ_DIAMETER"), fDiameter);
 
 		rNoAngle.setText(t.t("WIZ_NO_ANGLE"));
 		rAngle.setText(t.t("WIZ_ANGLE"));
 		ButtonGroup g = new ButtonGroup();
 		g.add(rNoAngle);
 		g.add(rAngle);
-		p.add(rNoAngle);
-		p.add(rAngle);
-		addField(p, t.t("WIZ_ITERATOR"), fIter);
-		addField(p, t.t("WIZ_OFFSET_Z"), fOffZ);
-		addField(p, t.t("WIZ_ACCURACY"), fAccuracy);
+		grid.add(rNoAngle);
+		grid.add(rAngle);
+		addField(grid, t.t("WIZ_ITERATOR"), fIter);
+		addField(grid, t.t("WIZ_OFFSET_Z"), fOffZ);
+		addField(grid, t.t("WIZ_ACCURACY"), fAccuracy);
 
-		Ui.wireDouble(fRadius, kf, v -> tcp.params.radiusMm = v);
-		Ui.wireDouble(fSpeed, kf, v -> tcp.params.speedMmS = v);
-		Ui.wireDouble(fAccel, kf, v -> tcp.params.accelMmS2 = v);
-		Ui.wireDouble(fOverrun, kf, v -> tcp.params.overrunDeg = v);
-		Ui.wireDouble(fSearchZ, kf, v -> tcp.params.searchZMm = v);
-		Ui.wireDouble(fDiameter, kf, v -> tcp.params.realDiameterMm = v);
-		Ui.wireInteger(fIter, kf, v -> tcp.params.iterator = v);
-		Ui.wireDouble(fOffZ, kf, v -> tcp.params.offsetZMm = v);
-		Ui.wireDouble(fAccuracy, kf, v -> tcp.params.accuracyDeg = v);
+		// CAPTRON-style keyboard limits: out-of-range input is clamped and written back to
+		// the field, so a typo fails at the field instead of far away during the probe.
+		Ui.wireDouble(fRadius, kf, v -> {
+			tcp.params.radiusMm = clamp(fRadius, v, Const.MIN_RADIUS_MM, Const.MAX_RADIUS_MM);
+			updateRadiusWarning();
+		});
+		Ui.wireDouble(fSpeed, kf, v -> tcp.params.speedMmS = clamp(fSpeed, v, Const.MIN_SPEED_MM_S, Const.MAX_SPEED_MM_S));
+		Ui.wireDouble(fAccel, kf, v -> tcp.params.accelMmS2 = clamp(fAccel, v, Const.MIN_ACCEL_MM_S2, Const.MAX_ACCEL_MM_S2));
+		Ui.wireDouble(fOverrun, kf, v -> tcp.params.overrunDeg = clamp(fOverrun, v, Const.MIN_OVERRUN_DEG, Const.MAX_OVERRUN_DEG));
+		Ui.wireDouble(fSearchZ, kf, v -> tcp.params.searchZMm = clamp(fSearchZ, v, Const.MIN_SEARCHZ_MM, Const.MAX_SEARCHZ_MM));
+		Ui.wireDouble(fDiameter, kf, v -> {
+			tcp.params.realDiameterMm = clamp(fDiameter, v, Const.MIN_REALDIAM_MM, Const.MAX_REALDIAM_MM);
+			updateRadiusWarning();
+		});
+		Ui.wireInteger(fIter, kf, v -> {
+			int c = Math.max(Const.MIN_ITER, Math.min(Const.MAX_ITER, v));
+			if (c != v) {
+				fIter.setText(String.valueOf(c));
+			}
+			tcp.params.iterator = c;
+		});
+		Ui.wireDouble(fOffZ, kf, v -> tcp.params.offsetZMm = clamp(fOffZ, v, Const.MIN_OFFZ_MM, Const.MAX_OFFZ_MM));
+		Ui.wireDouble(fAccuracy, kf, v -> tcp.params.accuracyDeg = clamp(fAccuracy, v, Const.MIN_ACCURACY_DEG, Const.MAX_ACCURACY_DEG));
 		cInvertZ.addActionListener(e -> tcp.params.invertZ = cInvertZ.isSelected());
 		rNoAngle.addActionListener(e -> tcp.params.adjustAngle = false);
 		rAngle.addActionListener(e -> tcp.params.adjustAngle = true);
+
+		// The radius floor depends on the tool: (Ø/2 + beam/teach margin) / sin 45.
+		radiusWarn.setForeground(new java.awt.Color(0xB0, 0x6A, 0x00));
+		radiusWarn.setVisible(false);
+		JPanel p = new JPanel(new BorderLayout(0, 8));
+		p.add(grid, BorderLayout.NORTH);
+		p.add(radiusWarn, BorderLayout.SOUTH);
 		return p;
+	}
+
+	/** Clamps to [min, max]; when clamped, the corrected value is written back to the field. */
+	private static double clamp(JTextField field, double v, double min, double max) {
+		double c = Math.max(min, Math.min(max, v));
+		if (c != v) {
+			field.setText(String.valueOf(c));
+		}
+		return c;
+	}
+
+	/** Shows the physics rule when the radius cannot arm the edge capture for this tool. */
+	private void updateRadiusWarning() {
+		if (tcp == null) {
+			return;
+		}
+		double minR = Const.minRadiusForTool(tcp.params.realDiameterMm);
+		if (tcp.params.radiusMm < minR) {
+			radiusWarn.setText(t.t("WIZ_RADIUS_WARN", String.format("%.1f", minR)));
+			radiusWarn.setVisible(true);
+		} else {
+			radiusWarn.setVisible(false);
+		}
 	}
 
 	private JPanel buildReferencingStep() {
@@ -395,6 +441,7 @@ public class SetupWizard extends JPanel {
 		fIter.setText(String.valueOf(tcp.params.iterator));
 		fOffZ.setText(String.valueOf(tcp.params.offsetZMm));
 		fAccuracy.setText(String.valueOf(tcp.params.accuracyDeg));
+		updateRadiusWarning();
 		doneImage.setIcon(Ui.icon(tcp.variant.getDoneImageResource(), 220, 240));
 	}
 

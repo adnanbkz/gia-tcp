@@ -78,6 +78,28 @@ public final class Const {
 	public static final double DEF_ACCURACY_DEG = 0.5;
 	public static final double DEF_MAXANGLE_DEG = 10.0;
 
+	// ----- Wizard input ranges (SensoPart FGL 50 variant; CAPTRON-style keyboard limits).
+	//        Out-of-range values are clamped at input so a typo (radius 60, overrun 2)
+	//        fails visibly at the field instead of far away during the probe. -----
+	public static final double MIN_RADIUS_MM = 2.0, MAX_RADIUS_MM = 20.0;    // fork window Ø50 incl. nozzle
+	public static final double MIN_SPEED_MM_S = 5.0, MAX_SPEED_MM_S = 100.0; // edge-capture latency vs cycle
+	public static final double MIN_ACCEL_MM_S2 = 20.0, MAX_ACCEL_MM_S2 = 2000.0;
+	public static final double MIN_OVERRUN_DEG = 5.0, MAX_OVERRUN_DEG = 45.0; // CAPTRON 5-45
+	public static final double MIN_SEARCHZ_MM = 3.0, MAX_SEARCHZ_MM = 50.0;
+	public static final double MIN_REALDIAM_MM = 0.0, MAX_REALDIAM_MM = 25.0; // 0 = disabled
+	public static final int MIN_ITER = 1, MAX_ITER = 10;
+	public static final double MIN_OFFZ_MM = 1.0, MAX_OFFZ_MM = 20.0;
+	public static final double MIN_ACCURACY_DEG = 0.05, MAX_ACCURACY_DEG = 5.0;
+	// Radius floor physics (see DEF_RADIUS_MM): beam half-width + teach margin over sin 45.
+	public static final double RADIUS_RULE_MARGIN_MM = 1.5;
+	public static final double RADIUS_RULE_WIRE_DIAM_MM = 1.2; // assumed tool Ø when no real diameter set
+
+	/** Minimum probe radius (mm) for a tool of {@code toolDiamMm} to arm the edge capture. */
+	public static double minRadiusForTool(double toolDiamMm) {
+		double d = toolDiamMm > 0 ? toolDiamMm : RADIUS_RULE_WIRE_DIAM_MM;
+		return (d / 2.0 + RADIUS_RULE_MARGIN_MM) / Math.sin(Math.toRadians(45));
+	}
+
 	// ----- Program-node (GIA TCP) data-model keys -----
 	public static final String K_ACT_TCPID = "actTcpId";       // int 1..30
 	public static final String K_ACT_ACTION = "actAction";     // 0 check, 1 validate, 2 recalibrate
