@@ -337,7 +337,9 @@ public class SetupWizard extends JPanel {
 		JButton stop = new JButton(t.t("BTN_STOP"));
 		stop.addActionListener(e -> {
 			cancelPassiveReferencing();
-			contribution.stopCalibration();
+			// Off the EDT: stopping opens a socket to the robot and would freeze the
+			// pendant exactly when the user is trying to stop (same fix as OverviewCard).
+			new Thread(contribution::stopCalibration, "gia-tcp-wizard-stop").start();
 		});
 		buttons.add(refStart);
 		buttons.add(stop);
@@ -548,7 +550,12 @@ public class SetupWizard extends JPanel {
 					return; // some other TCP was referenced; keep waiting for ours
 				}
 				contribution.setReferencingListener(null);
-				tcp = contribution.getSelectedTcp();
+				// Reload the slot we were waiting for — NOT the installation selection,
+				// which the user may have changed after leaving this step.
+				GiaTcp updated = contribution.getStore().load(waitId);
+				if (updated != null && updated.exists) {
+					tcp = updated;
+				}
 				refStatus.setText(t.t("WIZ_REF_PASSIVE_DONE"));
 				refStart.setEnabled(true);
 			}

@@ -60,6 +60,33 @@
     `tcp_action/A.java`, textos i18n del grupo de tolerancias). Útil como referencia si se
     abordan los puntos 6 y 7.
 
+## Revisión exhaustiva 2026-07-09 (hallazgos pendientes)
+
+Corregidos en el momento: re-referenciado persist+Validate bloqueado por el light check contra
+la referencia vieja (bucle infinito en modo Local); Stop del wizard bloqueando el EDT; el
+listener pasivo recargaba la selección en vez del TCP esperado.
+
+21. **Bucle de reintento sin salida con la config por defecto.** errH=true + If-Error vacío +
+    fallo persistente → el robot cicla approach+sondeo para siempre (paridad CAPTRON, pero
+    footgun). Opción: tope duro de intentos o insertar un Halt en la carpeta placeholder.
+22. **Nodo GIA TCP anidado en el If-Error de otro corrompe el estado del exterior**
+    (giaTcpOk/giaTcpErrCount/tcpc__rtStatus compartidos). CAPTRON usa arrays por id
+    (`cap__actionStatus[id]`); replicarlo si se quiere soportar anidamiento.
+23. **Ø con Mín=0/Máx=0 cae en silencio a la banda simétrica legacy** (±2 mm de K_TOL 'D').
+    Unificar al mecanismo null=sin-override de XYZ y retirar el sentinel "ambos 0".
+24. **Upgrade path invertZ**: la semántica del flag se invirtió respecto a versiones antiguas;
+    instalaciones persistidas con invertZ=true se mueven al revés. Revisar el flag tras
+    actualizar (o migrar el valor al cargar).
+25. **Upgrade path diámetro**: referencias antiguas guardaban el Ø con el offset aplicado; el
+    código nuevo asume medida cruda → banda de Ø siempre OUT hasta re-referenciar. Falta un
+    aviso o migración.
+26. **Puerto 5511 sin exclusión mutua**: dos tests live concurrentes (Overview + nodo) → el
+    segundo da "sin respuesta" con el robot moviéndose. Añadir lock o mensaje "test en curso".
+27. **Limpiezas señaladas**: statusText duplicado en dos vistas; flujo remote-check→activate→
+    move duplicado (OverviewCard/TCPCalibrationView); INIT posicional de 25 campos → clave=valor;
+    extraer isReferencingRun(); requestMove duplicado con InstallationContribution; mover
+    LAST_RESULT a un registro propio (CalibrationResultHistory).
+
 - ~~20. "Iniciar referenciado" en modo pasivo para modo Local~~ (aplicada 2026-07-07): en modo
   Local el botón ya no muestra un error — pasa a espera pasiva con instrucciones (nodo GIA TCP
   + persist + Play), y el paso se completa solo cuando el sink del `CalibrationServer` (5512)

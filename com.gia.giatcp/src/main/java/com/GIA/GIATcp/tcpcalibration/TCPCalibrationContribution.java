@@ -464,9 +464,12 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 			writer.appendLine("giaTcpBak = get_tcp_offset()");
 		}
 		// Probe with the reference TCP active. CAPTRON anchors Check/Validate above the
-		// referenced pose (h()) and Recalibrate above the taught centre (j()).
+		// referenced pose (h()) and Recalibrate above the taught centre (j()). A referencing
+		// run (persist) RE-ESTABLISHES the baseline, so it always anchors on the taught
+		// centre — the old reference must play no role in it.
 		writer.appendLine("set_tcp(" + UrScript.pose(refPose) + ")");
-		double[] anchor = action == Const.ACTION_RECALIBRATE ? tcp.centerPose : tcp.correctionRefPose();
+		double[] anchor = action == Const.ACTION_RECALIBRATE || persist
+				? tcp.centerPose : tcp.correctionRefPose();
 		writer.appendLine("giaTcpApproach = pose_trans(" + UrScript.pose(anchor)
 				+ ", p[0,0," + approachZ + ",0,0,0])");
 
@@ -488,7 +491,7 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 			// Light check (CAPTRON Check): no probing - verify the tool still cuts both
 			// beams at the referenced pose, forgiving up to Immerse Z of wear.
 			writer.appendLine("tcpc__rtStatus = " + lightCheck);
-		} else if (action == Const.ACTION_VALIDATE) {
+		} else if (action == Const.ACTION_VALIDATE && !persist) {
 			// CAPTRON Validate: light check first (fails fast with a precise status when
 			// the tool is gone/bent), then the full probe with tolerances.
 			writer.appendLine("tcpc__rtStatus = " + lightCheck);
@@ -496,8 +499,10 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 			writer.appendLine(rtCalib);
 			writer.end();
 		} else {
-			// Recalibrate: the tool may be far off after a nozzle/wire change, so no light
-			// check - probe fresh around the taught centre (CAPTRON j()).
+			// Recalibrate — and any referencing run (persist): the tool may be far off
+			// (nozzle/wire change) and the old reference must not gate the measurement,
+			// or a worn tool could never be re-referenced in Local mode. Probe fresh
+			// around the taught centre (CAPTRON j()).
 			writer.appendLine("movel(" + UrScript.pose(tcp.centerPose) + ", a=" + acc + ", v=" + vel + ")");
 			writer.appendLine(rtCalib);
 		}
