@@ -62,4 +62,13 @@ public final class TCPCalibrationSpec {
 	 * the {@link CalibrationServer} persists the baseline — no Remote Control / script injection.
 	 */
 	public boolean persistToInstallation = false;
+	/**
+	 * True when this run (re)establishes the baseline (a referencing run, or the bootstrap
+	 * test right after teaching). The measured pose becomes the new reference, so the XYZ
+	 * correction is identity BY CONSTRUCTION — CAPTRON stores the measured pose as h()
+	 * first and computes the correction against it, which keeps the hand-taught centre's
+	 * error (including the deliberate 1-2 mm teach immersion) out of the stored/applied
+	 * TCP. False = measure the drift against {@link #pRef}.
+	 */
+	public boolean referenceRun = false;
 }

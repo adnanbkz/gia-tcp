@@ -34,6 +34,7 @@ class CalibrationServerParseInitTest {
 		assertTrue(s != null);
 		assertEquals(7, s.tcpId);
 		assertTrue(s.persistToInstallation);
+		assertTrue(s.referenceRun, "a persist run re-bases: identity correction semantics");
 	}
 
 	@Test
@@ -42,6 +43,7 @@ class CalibrationServerParseInitTest {
 		TCPCalibrationSpec s = CalibrationServer.parseInit(line);
 		assertEquals(3, s.tcpId);
 		assertFalse(s.persistToInstallation);
+		assertFalse(s.referenceRun, "a measure-only run reports drift vs the baseline");
 	}
 
 	@Test

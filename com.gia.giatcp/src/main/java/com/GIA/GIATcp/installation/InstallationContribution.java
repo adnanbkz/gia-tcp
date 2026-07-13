@@ -449,8 +449,15 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		double[] ref = resolveTcpPoseSi(tcp.refTcp);
 		CalibrationResult result = calibration.calibrate(tcp, ref, isErrInterrupt(), getDebugLvl());
 		if (result.isSuccess()) {
-			store.setCalibrationResult(tcp.id, result.correctionSi, result.diameterMm,
-					measuredPoseFrom(tcp.centerPose, result.correctionSi));
+			// The wizard's run IS the referencing, so it re-bases (CAPTRON stores h() first
+			// and computes against it): the legacy script's correction — measured vs the
+			// hand-taught centre, i.e. teach error + deliberate teach immersion — is only
+			// used to reconstruct the measured pose; the stored XYZ correction is identity.
+			// A measured RX/RY (angle phase) is a real tool property and is kept.
+			double[] measured = measuredPoseFrom(tcp.centerPose, result.correctionSi);
+			double[] baseCorrection = { 0, 0, 0,
+					result.correctionSi[3], result.correctionSi[4], result.correctionSi[5] };
+			store.setCalibrationResult(tcp.id, baseCorrection, result.diameterMm, measured);
 		}
 		return result;
 	}
@@ -486,15 +493,17 @@ public class InstallationContribution implements InstallationNodeContribution, C
 	 * Blocking — call off the EDT. Tolerances are wide here: a test only measures and reports.
 	 */
 	public TCPCalibrationResult runTestCalibration(GiaTcp tcp) {
-		TCPCalibrationResult r = new TCPCalibrationRunner(new SecondaryProbeTransport()).calibrate(buildTestSpec(tcp));
+		TCPCalibrationSpec spec = buildTestSpec(tcp);
+		TCPCalibrationResult r = new TCPCalibrationRunner(new SecondaryProbeTransport()).calibrate(spec);
 		CalibrationServer.recordResult(tcp.id, r);
 		boolean measured = r.status == TCPCalibrationResult.Status.OK
 				|| r.status == TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
 		if (measured && r.correction != null) {
 			// CAPTRON parity: a manual calibration stores correction + diameter every time, but
-			// only the FIRST run after teaching establishes the reference pose. Later tests must
+			// only the FIRST run after teaching establishes the reference pose (referenceRun in
+			// the spec: the runner reported an identity correction for it). Later tests must
 			// NOT rebase it — the drift they are supposed to show would self-erase on each click.
-			double[] refPoseUpdate = tcp.calibrated && tcp.hasRefPose() ? null : r.measuredPose;
+			double[] refPoseUpdate = spec.referenceRun ? r.measuredPose : null;
 			store.setCalibrationResult(tcp.id, r.correction, r.diameterMm, refPoseUpdate);
 		}
 		return r;
@@ -530,6 +539,9 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		s.maxAngleRyDeg = p.maxAngleRyDeg;
 		s.diamOffsetMm = 0.0;
 		s.tolXYZm = new double[] { 0.999, 0.999, 0.999 }; // test = measure + report, never fail on band
+		// The first run after teaching bootstraps the baseline (referencing semantics: the
+		// measured pose becomes refPose and the correction is identity by construction).
+		s.referenceRun = !(tcp.calibrated && tcp.hasRefPose());
 		return s;
 	}
 

@@ -54,8 +54,14 @@ public final class TCPCalibrationRunner {
 		}
 		double[] pSearchZ = z.pose;
 
-		// 3. Correction (all maths in Java).
-		double[] correction = TCPCalibrationMaths.correction(s.pRef, pSearchZ);
+		// 3. Correction (all maths in Java). A referencing run RE-BASES: the measured pose
+		// is the new baseline, so its XYZ correction is identity by construction (CAPTRON
+		// stores h() first and computes against it) — the taught centre's teach error must
+		// never survive as a stored/applied correction. Any angle measured below is a real
+		// tool property and still applies.
+		double[] correction = s.referenceRun
+				? new double[6]
+				: TCPCalibrationMaths.correction(s.pRef, pSearchZ);
 		double[] correctedTcp = TCPCalibrationMaths.correctedTcp(s.refTcp, correction);
 		double diameterMm = centre.diameterM * 1000.0 + s.diamOffsetMm;
 

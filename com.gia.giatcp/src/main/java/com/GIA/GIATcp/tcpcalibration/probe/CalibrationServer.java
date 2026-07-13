@@ -172,6 +172,9 @@ public final class CalibrationServer {
 			if (t.length >= 14) {
 				s.tcpId = (int) Math.round(Double.parseDouble(t[12].trim()));
 				s.persistToInstallation = Double.parseDouble(t[13].trim()) != 0.0;
+				// A persist run IS a referencing run: it re-establishes the baseline, so the
+				// runner must report an identity correction (see TCPCalibrationSpec).
+				s.referenceRun = s.persistToInstallation;
 			}
 			if (t.length >= 16) {
 				s.diamTolMm = Double.parseDouble(t[14].trim());

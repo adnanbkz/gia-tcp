@@ -75,4 +75,24 @@ class TCPCalibrationRunnerRefPoseTest {
 		new TCPCalibrationRunner(t).calibrate(s);
 		assertArrayEquals(s.pRef, t.circleStart, 1e-12);
 	}
+
+	/**
+	 * A referencing run re-bases (CAPTRON stores the measured pose as h() first and computes
+	 * the correction against it): the correction must be identity — the taught centre's
+	 * teach error (deliberate 1-2 mm immersion included) must never survive as a stored or
+	 * applied correction — and the corrected TCP must be the reference TCP itself.
+	 */
+	@Test
+	void referenceRunReportsIdentityCorrectionAndTheMeasuredPose() {
+		TCPCalibrationSpec s = new TCPCalibrationSpec();
+		s.pStart = new double[] { 0.001, 0.002, 0, 0, 0, 0 };
+		s.pRef = new double[] { 0, 0, -0.003, 0, 0, 0 }; // taught centre, 2 mm teach error in Z
+		s.refTcp = new double[] { 0.01, 0, 0.2, 0, 0, 0 };
+		s.referenceRun = true;
+		TCPCalibrationResult r = new TCPCalibrationRunner(new RecordingTransport()).calibrate(s);
+		assertEquals(TCPCalibrationResult.Status.OK, r.status);
+		assertArrayEquals(new double[6], r.correction, 1e-12);
+		assertArrayEquals(s.refTcp, r.correctedTcp, 1e-12);
+		assertArrayEquals(new double[] { 0, 0, -0.005, 0, 0, 0 }, r.measuredPose, 1e-12);
+	}
 }
