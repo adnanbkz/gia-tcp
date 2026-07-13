@@ -54,25 +54,34 @@ public class CalibrationResult {
 		return new CalibrationResult(false, 999, new double[6], 0.0);
 	}
 
-	/** Parses the CSV line "status,xMM,yMM,zMM,rxDeg,ryDeg,rzDeg,diamMM". */
+	/**
+	 * Parses the CSV line "status,xMM,yMM,zMM,rxDeg,ryDeg,rzDeg,diamMM". The reporting
+	 * script always sends all 8 fields (also on error statuses), so anything shorter or
+	 * non-finite is a truncated/foreign line and must NOT count as a received result — a
+	 * bare "0" would otherwise read as a successful referencing with a zero correction.
+	 */
 	public static CalibrationResult parse(String csv) {
 		if (csv == null || csv.trim().isEmpty()) {
 			return timeout();
 		}
 		String[] p = csv.trim().split(",");
+		if (p.length < 8) {
+			return timeout();
+		}
 		try {
-			int status = (int) Math.round(Double.parseDouble(p[0].trim()));
-			double[] corr = new double[6];
-			if (p.length >= 7) {
-				corr[0] = Double.parseDouble(p[1].trim()) / 1000.0;
-				corr[1] = Double.parseDouble(p[2].trim()) / 1000.0;
-				corr[2] = Double.parseDouble(p[3].trim()) / 1000.0;
-				corr[3] = Math.toRadians(Double.parseDouble(p[4].trim()));
-				corr[4] = Math.toRadians(Double.parseDouble(p[5].trim()));
-				corr[5] = Math.toRadians(Double.parseDouble(p[6].trim()));
+			double[] raw = new double[8];
+			for (int i = 0; i < 8; i++) {
+				raw[i] = Double.parseDouble(p[i].trim());
+				if (Double.isNaN(raw[i]) || Double.isInfinite(raw[i])) {
+					return timeout();
+				}
 			}
-			double diam = p.length >= 8 ? Double.parseDouble(p[7].trim()) : 0.0;
-			return new CalibrationResult(true, status, corr, diam);
+			int status = (int) Math.round(raw[0]);
+			double[] corr = {
+					raw[1] / 1000.0, raw[2] / 1000.0, raw[3] / 1000.0,
+					Math.toRadians(raw[4]), Math.toRadians(raw[5]), Math.toRadians(raw[6])
+			};
+			return new CalibrationResult(true, status, corr, raw[7]);
 		} catch (RuntimeException e) {
 			return timeout();
 		}

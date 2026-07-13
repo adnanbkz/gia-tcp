@@ -41,7 +41,9 @@ public final class RepeatabilityController {
 		String program = buildProgram(tcp, refTcpPoseSi, n, errInterrupt, debugLvl);
 		try (ServerSocket server = new ServerSocket()) {
 			server.setReuseAddress(true);
-			server.bind(new InetSocketAddress(Const.CALIB_RETURN_PORT));
+			// Loopback only, like the calibration controller: the robot connects via 127.0.0.1.
+			server.bind(new InetSocketAddress(
+					java.net.InetAddress.getLoopbackAddress(), Const.CALIB_RETURN_PORT));
 			server.setSoTimeout(ACCEPT_TIMEOUT_MS);
 			if (!sender.sendRawPrimary(program)) {
 				logger.warn("Repeatability program could not be sent to the primary interface (30001)");

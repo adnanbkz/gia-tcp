@@ -45,7 +45,10 @@ public class CalibrationController {
 		String program = buildProgram(tcp, refTcpPoseSi, errInterrupt, debugLvl);
 		try (ServerSocket server = new ServerSocket()) {
 			server.setReuseAddress(true);
-			server.bind(new java.net.InetSocketAddress(Const.CALIB_RETURN_PORT));
+			// Loopback only: the robot connects via 127.0.0.1 and this port persists a
+			// referencing — it must not be reachable from the rest of the network.
+			server.bind(new java.net.InetSocketAddress(
+					java.net.InetAddress.getLoopbackAddress(), Const.CALIB_RETURN_PORT));
 			server.setSoTimeout(ACCEPT_TIMEOUT_MS);
 			if (!sender.sendRawPrimary(program)) {
 				logger.warn("Calibration program could not be sent to the primary interface (30001)");
