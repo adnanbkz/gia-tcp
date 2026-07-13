@@ -313,8 +313,22 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 
 	@Override
 	public void openView() {
+		ensureTcpIdPinned();
 		ensureErrorHandlingChild();
 		view.refresh(this);
+	}
+
+	/**
+	 * Pins the effective TCP id into the DataModel the first time the node is opened.
+	 * {@link #getTcpId()}'s fallback is dynamic (first existing slot), so without pinning a
+	 * node saved without an explicit selection silently switches TCP when a lower slot is
+	 * created later. CAPTRON instead leaves the node undefined (ctId = -1) until the user
+	 * picks; pinning keeps already-saved programs working while making the choice stable.
+	 */
+	private void ensureTcpIdPinned() {
+		if (!model.isSet(Const.K_ACT_TCPID)) {
+			setTcpId(getTcpId());
+		}
 	}
 
 	@Override
