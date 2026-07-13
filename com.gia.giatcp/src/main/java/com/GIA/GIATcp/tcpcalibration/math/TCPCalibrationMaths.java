@@ -141,15 +141,50 @@ public final class TCPCalibrationMaths {
 		return new CenterResult(pIntersect, diam, OK);
 	}
 
-	/** Mean of the chord lengths the tool occluded at each crossing (port of gia__meanDiameter). */
+	/**
+	 * Mean tool width seen by the beams. Each crossing's entry→exit chord is projected
+	 * PERPENDICULAR to its beam direction (the line through that beam's two crossing
+	 * midpoints — the same line {@link #computeCenter} intersects): the raw chord also
+	 * contains a tangential component whenever the beam does not pass through the circle
+	 * centre, inflating the measurement (|chord| = sqrt(D² + Δt²) > D — e.g. +0.19 mm for
+	 * a Ø1.2 wire probed at radius 6 with the beam 3 mm off centre). CAPTRON's gl.script
+	 * measures the raw chord; the projection removes the off-centre error while keeping
+	 * the constant optical beam width cancelling via the referenced diameter.
+	 */
 	public static double meanDiameter(double[][] edgePoses) {
 		double sum = 0;
 		int count = 0;
 		for (int i = 0; i + 1 < edgePoses.length; i += 2) {
-			sum += pointDist(edgePoses[i], edgePoses[i + 1]);
+			int base = (i / 4) * 4; // this pair's beam group: [base .. base+3]
+			double[] u = base + 3 < edgePoses.length
+					? unitDelta(midpoint(edgePoses[base], edgePoses[base + 1]),
+							midpoint(edgePoses[base + 2], edgePoses[base + 3]))
+					: null;
+			sum += perpendicularWidth(edgePoses[i], edgePoses[i + 1], u);
 			count++;
 		}
 		return count > 0 ? sum / count : 0;
+	}
+
+	/** Unit vector from a's to b's position, or null when they (nearly) coincide. */
+	private static double[] unitDelta(double[] a, double[] b) {
+		double dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+		double n = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		if (n < 1e-9) {
+			return null;
+		}
+		return new double[] { dx / n, dy / n, dz / n };
+	}
+
+	/** Length of the p1→p2 chord perpendicular to u (raw length when u is unknown). */
+	private static double perpendicularWidth(double[] p1, double[] p2, double[] u) {
+		if (u == null) {
+			return pointDist(p1, p2);
+		}
+		double cx = p2[0] - p1[0], cy = p2[1] - p1[1], cz = p2[2] - p1[2];
+		double along = cx * u[0] + cy * u[1] + cz * u[2];
+		double px = cx - along * u[0], py = cy - along * u[1], pz = cz - along * u[2];
+		return Math.sqrt(px * px + py * py + pz * pz);
 	}
 
 	// ==================================================================

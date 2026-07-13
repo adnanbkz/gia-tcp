@@ -66,9 +66,10 @@ public final class Const {
 	public static final double DEF_RADIUS_MM = 6.0;      // Ø12 probe circle (wire tip); ~half the lap of the old Ø20
 	public static final double DEF_SPEED_MM_S = 30.0;    // gentle base; node Speed = Slow/Normal/Fast scales it
 	public static final double DEF_ACCEL_MM_S2 = 100.0;
-	// Must exceed the blocked-arc half-angle at the circle start (~asin(half occlusion/radius)):
-	// wire on a 6 mm radius is ~10 deg, so do NOT lower this together with small radii.
-	public static final double DEF_OVERRUN_DEG = 10.0;
+	// Must cover the FULL blocked arc around a crossing for any beam phase, not just the
+	// half-angle: 2*asin((tool dia/2)/radius) — wire on a 6 mm radius blocks ~11.5 deg, so
+	// 10 deg could miss an edge when the circle starts inside a beam. CAPTRON defaults 15.
+	public static final double DEF_OVERRUN_DEG = 15.0;
 	public static final double DEF_SEARCHZ_MM = 8.0;     // retract stroke to clear the beams (> coplanarity + beam + stop latency)
 	public static final boolean DEF_INVERTZ = false;     // CAPTRON default: search uses -toolZ, immerse uses +toolZ
 	public static final double DEF_REALDIAM_MM = 0.0;
@@ -85,7 +86,9 @@ public final class Const {
 	public static final double MIN_SPEED_MM_S = 5.0, MAX_SPEED_MM_S = 100.0; // edge-capture latency vs cycle
 	public static final double MIN_ACCEL_MM_S2 = 20.0, MAX_ACCEL_MM_S2 = 2000.0;
 	public static final double MIN_OVERRUN_DEG = 5.0, MAX_OVERRUN_DEG = 45.0; // CAPTRON 5-45
-	public static final double MIN_SEARCHZ_MM = 3.0, MAX_SEARCHZ_MM = 50.0;
+	// 6 mm floor: worst-case fork decoplanarity (3 mm) + teach immersion (1-2 mm) + margin;
+	// with 3 mm the retract could never free both beams on a real 2-fork mount.
+	public static final double MIN_SEARCHZ_MM = 6.0, MAX_SEARCHZ_MM = 50.0;
 	public static final double MIN_REALDIAM_MM = 0.0, MAX_REALDIAM_MM = 25.0; // 0 = disabled
 	public static final int MIN_ITER = 1, MAX_ITER = 10;
 	public static final double MIN_OFFZ_MM = 1.0, MAX_OFFZ_MM = 20.0;
@@ -98,6 +101,18 @@ public final class Const {
 	public static double minRadiusForTool(double toolDiamMm) {
 		double d = toolDiamMm > 0 ? toolDiamMm : RADIUS_RULE_WIRE_DIAM_MM;
 		return (d / 2.0 + RADIUS_RULE_MARGIN_MM) / Math.sin(Math.toRadians(45));
+	}
+
+	/**
+	 * Minimum overrun (deg) that guarantees 4 edges per beam for ANY beam phase: the tool
+	 * blocks an arc of 2·asin((Ø/2)/radius) around each crossing, and when the circle
+	 * starts inside that arc the missed entry edge is only recovered by overrunning the
+	 * full arc past the start point.
+	 */
+	public static double minOverrunForTool(double toolDiamMm, double radiusMm) {
+		double d = toolDiamMm > 0 ? toolDiamMm : RADIUS_RULE_WIRE_DIAM_MM;
+		double ratio = radiusMm > 0 ? Math.min(1.0, (d / 2.0) / radiusMm) : 1.0;
+		return Math.toDegrees(2 * Math.asin(ratio));
 	}
 
 	// ----- Program-node (GIA TCP) data-model keys -----

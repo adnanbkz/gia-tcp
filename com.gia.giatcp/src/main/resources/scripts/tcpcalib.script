@@ -183,8 +183,11 @@ def tcpc__searchZMsg(pCenter, in1, in2, zSearch, zImmerse, acc, vel):
   h = run tcpc__moveThread()
   while True:
     if (tcpc__getInput(in1) and tcpc__getInput(in2)):
-      sleep(0.04)
+      # Capture AT the edge (like the retract branch above): sleeping first let the robot
+      # travel ~v*0.04 past the beam plane, a systematic bias that only cancelled when
+      # referencing and runtime used the same speed. The settle sleep stays for the stop.
       local pz = get_actual_tcp_pose()
+      sleep(0.04)
       kill h
       stopl(2.0)
       # Final placement (CAPTRON re-places the tip at the beam plane at the end of

@@ -143,6 +143,28 @@ class TCPCalibrationMathsTest {
 		assertTrue(!TCPCalibrationMaths.withinTol(new double[] { 0.0015, 0, 0, 0, 0, 0 }, tol));
 	}
 
+	// ---- diameter ----
+
+	/**
+	 * Beam 3 mm off the circle centre (R6, Ø1.2): the raw entry→exit chord measures
+	 * 1.389 mm (tangential component included), the perpendicular projection recovers
+	 * the true 1.2 mm width. Beam directions come from the crossing midpoints.
+	 */
+	@Test
+	void meanDiameterIgnoresTheTangentialChordComponent() {
+		double x1 = Math.sqrt(36.0 - 5.76) / 1000.0;  // circle x at y = b - D/2 = 2.4 mm
+		double x2 = Math.sqrt(36.0 - 12.96) / 1000.0; // circle x at y = b + D/2 = 3.6 mm (= 4.8 mm)
+		double[][] poses = {
+				// beam A along X, 3 mm off centre: two crossings at x > 0 and x < 0
+				p(x1, 0.0024), p(x2, 0.0036),
+				p(-x1, 0.0024), p(-x2, 0.0036),
+				// beam B along Y through the centre
+				p(-0.0006, 0.006), p(0.0006, 0.006),
+				p(-0.0006, -0.006), p(0.0006, -0.006)
+		};
+		assertEquals(0.0012, TCPCalibrationMaths.meanDiameter(poses), 1e-12);
+	}
+
 	// ---- helpers ----
 
 	private static double[] p(double x, double y) {

@@ -78,6 +78,7 @@ public class SetupWizard extends JPanel {
 	private final JTextField fOffZ = new JTextField(8);
 	private final JTextField fAccuracy = new JTextField(8);
 	private final JLabel radiusWarn = new JLabel();
+	private final JLabel overrunWarn = new JLabel();
 	private final JLabel refStatus = new JLabel();
 	private final JButton refStart = new JButton();
 	private final JLabel doneImage = new JLabel();
@@ -274,7 +275,10 @@ public class SetupWizard extends JPanel {
 		});
 		Ui.wireDouble(fSpeed, kf, v -> tcp.params.speedMmS = clamp(fSpeed, v, Const.MIN_SPEED_MM_S, Const.MAX_SPEED_MM_S));
 		Ui.wireDouble(fAccel, kf, v -> tcp.params.accelMmS2 = clamp(fAccel, v, Const.MIN_ACCEL_MM_S2, Const.MAX_ACCEL_MM_S2));
-		Ui.wireDouble(fOverrun, kf, v -> tcp.params.overrunDeg = clamp(fOverrun, v, Const.MIN_OVERRUN_DEG, Const.MAX_OVERRUN_DEG));
+		Ui.wireDouble(fOverrun, kf, v -> {
+			tcp.params.overrunDeg = clamp(fOverrun, v, Const.MIN_OVERRUN_DEG, Const.MAX_OVERRUN_DEG);
+			updateRadiusWarning();
+		});
 		Ui.wireDouble(fSearchZ, kf, v -> tcp.params.searchZMm = clamp(fSearchZ, v, Const.MIN_SEARCHZ_MM, Const.MAX_SEARCHZ_MM));
 		Ui.wireDouble(fDiameter, kf, v -> {
 			tcp.params.realDiameterMm = clamp(fDiameter, v, Const.MIN_REALDIAM_MM, Const.MAX_REALDIAM_MM);
@@ -293,12 +297,21 @@ public class SetupWizard extends JPanel {
 		rNoAngle.addActionListener(e -> tcp.params.adjustAngle = false);
 		rAngle.addActionListener(e -> tcp.params.adjustAngle = true);
 
-		// The radius floor depends on the tool: (Ø/2 + beam/teach margin) / sin 45.
+		// Geometry rules that depend on the tool: radius floor (Ø/2 + beam/teach margin)
+		// / sin 45, and the overrun needed to guarantee 4 edges per beam in any phase.
 		radiusWarn.setForeground(new java.awt.Color(0xB0, 0x6A, 0x00));
 		radiusWarn.setVisible(false);
+		overrunWarn.setForeground(new java.awt.Color(0xB0, 0x6A, 0x00));
+		overrunWarn.setVisible(false);
+		JPanel warns = new JPanel();
+		warns.setLayout(new BoxLayout(warns, BoxLayout.Y_AXIS));
+		radiusWarn.setAlignmentX(Component.LEFT_ALIGNMENT);
+		overrunWarn.setAlignmentX(Component.LEFT_ALIGNMENT);
+		warns.add(radiusWarn);
+		warns.add(overrunWarn);
 		JPanel p = new JPanel(new BorderLayout(0, 8));
 		p.add(grid, BorderLayout.NORTH);
-		p.add(radiusWarn, BorderLayout.SOUTH);
+		p.add(warns, BorderLayout.SOUTH);
 		return p;
 	}
 
@@ -311,7 +324,7 @@ public class SetupWizard extends JPanel {
 		return c;
 	}
 
-	/** Shows the physics rule when the radius cannot arm the edge capture for this tool. */
+	/** Shows the physics rules the current radius/overrun/Ø combination violates. */
 	private void updateRadiusWarning() {
 		if (tcp == null) {
 			return;
@@ -322,6 +335,13 @@ public class SetupWizard extends JPanel {
 			radiusWarn.setVisible(true);
 		} else {
 			radiusWarn.setVisible(false);
+		}
+		double minO = Const.minOverrunForTool(tcp.params.realDiameterMm, tcp.params.radiusMm);
+		if (tcp.params.overrunDeg < minO) {
+			overrunWarn.setText(t.t("WIZ_OVERRUN_WARN", String.format("%.0f", Math.ceil(minO))));
+			overrunWarn.setVisible(true);
+		} else {
+			overrunWarn.setVisible(false);
 		}
 	}
 
