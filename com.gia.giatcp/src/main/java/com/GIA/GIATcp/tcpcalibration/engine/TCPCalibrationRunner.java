@@ -86,7 +86,7 @@ public final class TCPCalibrationRunner {
 
 		// 4. Optional orientation: try a higher circle first, then a lower one.
 		if (s.adjustAngle && status == TCPCalibrationResult.Status.OK) {
-			double[] angle = measureOrientation(s);
+			double[] angle = measureOrientation(s, pSearchZ);
 			if (angle == null) {
 				return TCPCalibrationResult.error(TCPCalibrationResult.Status.ORIENTATION_NOT_POSSIBLE);
 			}
@@ -107,17 +107,24 @@ public final class TCPCalibrationRunner {
 	 * Orientation tilt [RX, RY] (rad), or {@code null} = NOT POSSIBLE. Probes a circle
 	 * RAISED in base +Z first (torch up); if it does not cross the beams, a LOWERED one;
 	 * if neither crosses, the calibration is not possible.
+	 *
+	 * <p>Anchored on the pose just MEASURED at the beam plane ({@code pSearchZ}), never on
+	 * the reference pose: both measurements then share the same TCP error, so their
+	 * difference isolates the tilt. Anchoring on pRef would feed the XYZ drift into the
+	 * atan2 (1 mm of drift at dz = 5 mm reads as a false 11.3° tilt). CAPTRON avoids the
+	 * same intercept by probing the angle with the XYZ-corrected TCP already active
+	 * (adjust_angle.script set_tcp before the circle).</p>
 	 */
-	private double[] measureOrientation(TCPCalibrationSpec s) {
+	private double[] measureOrientation(TCPCalibrationSpec s, double[] pMeasured) {
 		double dz = s.orientationDzMm / 1000.0;
-		double[] angle = angleAt(offsetBaseZ(s.pRef, dz), s);   // higher
+		double[] angle = angleAt(offsetBaseZ(pMeasured, dz), pMeasured, s);   // higher
 		if (angle == null) {
-			angle = angleAt(offsetBaseZ(s.pRef, -dz), s);       // lower
+			angle = angleAt(offsetBaseZ(pMeasured, -dz), pMeasured, s);       // lower
 		}
 		return angle;
 	}
 
-	private double[] angleAt(double[] probePose, TCPCalibrationSpec s) {
+	private double[] angleAt(double[] probePose, double[] pMeasured, TCPCalibrationSpec s) {
 		CircleData c = transport.probeCircle(probePose, s);
 		if (c == null || !c.valid()) {
 			return null;
@@ -127,7 +134,7 @@ public final class TCPCalibrationRunner {
 		if (centre.error != TCPCalibrationMaths.OK) {
 			return null;
 		}
-		return TCPCalibrationMaths.calcAngleXY(s.pRef, centre.intersect);
+		return TCPCalibrationMaths.calcAngleXY(pMeasured, centre.intersect);
 	}
 
 	private static double[] offsetBaseZ(double[] pose, double dz) {
