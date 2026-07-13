@@ -93,6 +93,53 @@ listener pasivo recargaba la selección en vez del TCP esperado.
   persiste el referenciado de ese TCP (`InstallationContribution.ReferencingListener`). El
   botón Parar cancela la espera. Cero cambios de protocolo.
 
+## Auditoría externa 2026-07-13 (hallazgos verificados, pendientes)
+
+Informe completo en `docs/AUDITORIA_TCP_FABLE5.md`; verificación propia contra código y
+decompilado en CONTEXTO (entrada 2026-07-13). Corregidos en el momento: referenciado con
+corrección identidad, RX/RY anclado en pSearchZ, tcpId materializado, 5510 endurecido.
+
+28. **Check/Validate con el TCP calibrado activo** (CAPTRON `tcp_action/C.java:351-359` usa
+    c.A() para Check/Validate; nosotros `set_tcp(refTcp)` siempre). Con la herramienta sin
+    derivar es consistente (h se midió con refTcp); tras una deriva corregida por Recalibrate,
+    Check da INPUT_LOW y Validate re-detecta la misma deriva para siempre (encadena con el
+    item 21). ANTES de tocarlo: estudiar en el decompilado cómo persiste CAPTRON las
+    recalibraciones de runtime (nuestro Recalibrate solo escribe la variable del programa).
+    Incluye: mover el `set_tcp` dentro del `while` del nodo (un If-Error que cambie el TCP
+    contamina el siguiente intento).
+29. **Captura de `pz` 40 ms tarde en la inmersión** (`tcpc__searchZMsg`: sleep antes de
+    capturar; la retracción captura antes del sleep). Paridad CAPTRON (`search_z.script`),
+    sesgo ~0,24 mm que se cancela a velocidad igual; entra ±0,12 mm diferencial al mezclar
+    velocidades (el test live no aplica el factor del nodo). Mejora: capturar al flanco y
+    usar el sleep solo como confirmación.
+30. **`meanDiameter` mide la cuerda completa** (componente tangencial incluida cuando el haz
+    no pasa por el centro del círculo). Paridad CAPTRON (`gl.script:69-81`); impacto acotado
+    por la banda XYZ (~0,02 mm con hilo). Mejora: proyectar cada par de flancos perpendicular
+    a la dirección del haz.
+31. **Validación conjunta radio/Ø/overrun/Search Z en el wizard.** El overrun default de 10°
+    no cubre la peor fase ni con hilo (arco bloqueado 2·asin((Ø/2)/R) ≈ 11,5° con R6/Ø1,2;
+    CAPTRON usa 15°); con boquilla Ø18/R14 se viola la regla del radio mínimo (14 < 14,85) y
+    el wizard solo avisa. Search Z mínimo (3 mm) insuficiente con descoplanaridad de 3 mm +
+    teach de 1-2 mm. Validar el conjunto y rechazar combinaciones imposibles.
+32. **Stop sin propiedad de sesión.** El Stop del Overview actúa sin calibración activa (halt
+    por 30001 + programa por 30002 durante un programa ajeno); tras parar el wizard legacy,
+    el ServerSocket 5510 queda bloqueado hasta 120 s (reintento inmediato falla); el test de
+    repetibilidad tiene `stop()` sin botón que lo invoque.
+33. **El 5512 responde OP_DONE antes de persistir** (`sendDone` → `maybePersist` → sink con
+    `invokeLater`): el programa continúa con OK aunque la escritura del DataModel falle.
+    Convertir el sink en operación confirmable.
+34. **Defaults de nodo no materializados** (mismo patrón que invertZ/diámetro, items 24-25):
+    Approach Z pasó de 50→30 mm y reintentos de 1→2; nodos antiguos sin clave cambian en
+    silencio al actualizar. Versionar el DataModel o materializar al crear (tcpId ya se
+    materializa en openView desde 2026-07-13).
+35. **Estados -1/-2/-3 colapsados en NO_INTERSECT** (número de flancos, paralelas,
+    intersección lejana). El legacy los distingue (REF_ERR_1/2/3). Añadir estados al final
+    del enum y mapear.
+36. **`CalibrationServer.stop()` no cierra sesiones activas** (solo el socket de escucha):
+    una sesión puede sobrevivir al bundle hasta 120 s y ejecutar un sink obsoleto.
+37. **Diagnostics conserva una pose realtime obsoleta** tras un fallo de lectura del 30003:
+    los flancos nuevos se registran con pose vieja. Invalidar la muestra por timestamp.
+
 ## Validación pendiente (no es código)
 
 18. **Validación en robot real** (`mvn install -Premote`, checklist del README): polaridad en

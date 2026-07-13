@@ -307,6 +307,40 @@ ajuste RX/RY del stack nuevo es single-shot (los parámetros `iterator`/`accurac
 solo los usa el stack legacy — la iteración con re-centrado queda para cuando se valide XYZ en
 hardware). Resto en `docs/MEJORAS_PENDIENTES.md` (baja: 14-17; validación: 18-19; propuesta 20).
 
+### 2026-07-13 — Auditoría externa verificada + fixes SEV-1 (bloque 1)
+
+Auditoría externa (Codex) en `docs/AUDITORIA_TCP_FABLE5.md`, verificada hallazgo a hallazgo
+contra el código y el decompilado CAPTRON antes de tocar nada. Veredicto: 4 SEV-1 son
+desviaciones reales de CAPTRON (corregidas aquí), 2 son paridad CAPTRON exacta que el informe
+marca como fallo (sleep de Z y diámetro por cuerda → items 29-30, mejoras opcionales), 1 es
+física del montaje de 2 horquillas (descoplanaridad → refuerza el item 15).
+
+Fixes aplicados (uno por commit):
+- **Referenciado re-basa con corrección identidad.** El primer referenciado calculaba la
+  corrección contra el centro enseñado j (error de teach + 1-2 mm de inmersión deliberada) y
+  un persist+Recalibrate con defaults la APLICABA (`set_tcp(refTcp·q⁻¹·j)`) — justo el flujo
+  Local de la entrada 20. CAPTRON guarda la pose medida como h() ANTES de calcular
+  (`tcp/inst/A.java:523-526`) → corrección identidad. Nuevo `TCPCalibrationSpec.referenceRun`
+  (persist ⇒ true; test live bootstrap ⇒ true), runner reporta identidad (el RX/RY medido se
+  conserva), wizard legacy persiste corrección solo-rotación + refPose reconstruida.
+  Instalaciones existentes: la corrección heredada ≠ 0 es solo display y se normaliza al
+  re-referenciar (item 19).
+- **RX/RY anclado en `pSearchZ`.** El círculo angular se anclaba en pRef: la deriva XYZ
+  recién medida entraba en el atan2 (1 mm con Δz=5 mm = 11,3° falsos > máx 10° →
+  ORIENTATION_NOT_POSSIBLE con herramienta recta). Ambas medidas comparten ahora el mismo
+  error de TCP y su diferencia aísla la inclinación (equivale al set_tcp corregido de
+  CAPTRON en `adjust_angle.script` sin ampliar el protocolo 5512).
+- **tcpId materializado en openView** (el default dinámico `firstTcpId()` cambiaba el TCP
+  del nodo en silencio al crear un slot inferior; CAPTRON usa ctId=-1 indefinido).
+- **5510 endurecido**: bind a loopback (calibración y repetibilidad) y parse estricto de 8
+  campos finitos — una línea truncada "0" contaba como referenciado OK con corrección cero.
+
+Tests: **48 verdes** (nuevos: identidad en reference run, referenceRun en parseInit,
+orientación ×3 —deriva sin falsa inclinación, ancla del círculo, inclinación real—, parse
+5510 ×5). Pendientes de la auditoría: items 28-37 de MEJORAS_PENDIENTES (el 28, Check/
+Validate con el TCP calibrado activo, requiere estudiar antes cómo persiste CAPTRON las
+recalibraciones de runtime). Release `v10_fixes-auditoria-sev1`.
+
 ### 2026-07-10 — Nodo de programa: cabecera compacta
 
 - El nodo cortaba la pestaña Básico a partir de "Ajuste de ángulo activo" (Iterador de

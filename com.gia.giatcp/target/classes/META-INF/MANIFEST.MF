@@ -1,5 +1,5 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1783930183182
+Bnd-LastModified: 1783938379788
 Build-Jdk-Spec: 1.8
 Bundle-Activator: com.GIA.GIATcp.impl.Activator
 Bundle-Category: URCap

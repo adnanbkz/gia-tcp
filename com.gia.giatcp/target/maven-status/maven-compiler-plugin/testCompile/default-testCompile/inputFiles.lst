@@ -3,5 +3,7 @@
 /home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/installation/model/CalibParamsTest.java
 /home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/tcpcalibration/probe/CalibCsvZParseTest.java
 /home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/tcpcalibration/math/TCPCalibrationMathsTest.java
+/home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/installation/calib/CalibrationResultParseTest.java
+/home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerOrientationTest.java
 /home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerRefPoseTest.java
 /home/adnan/IdeaProjects/giatcp/com.gia.giatcp/src/test/java/com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerDiameterTest.java
