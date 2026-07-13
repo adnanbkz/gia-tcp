@@ -11,12 +11,15 @@ public final class TCPCalibrationResult {
 	public enum Status {
 		OK,
 		NO_ROBOT_REPLY,            // no socket reply (sim / wiring / not connected)
-		NO_INTERSECT,              // circle did not cross both beams cleanly
+		NO_INTERSECT,              // beam lines (near) parallel — no clean intersection
 		SEARCH_Z_FAILED,           // Z retract never freed the beams (search motion failed)
 		OUT_OF_TOLERANCE,          // correction outside the XYZ band
 		ORIENTATION_NOT_POSSIBLE,  // neither the higher nor the lower circle crossed the beams
 		INPUT_LOW_AT_CENTER,       // tool does not cut both beams at the intersect (CAPTRON 4/21: bad teach/TCP/tool)
-		IMMERSE_FAILED             // immerse never re-cut both beams (CAPTRON 31: tool worn/missing)
+		IMMERSE_FAILED,            // immerse never re-cut both beams (CAPTRON 31: tool worn/missing)
+		WRONG_POINT_COUNT,         // not exactly 4 edges per beam (chatter / overrun too small, CAPTRON 11)
+		INTERSECT_TOO_FAR,         // intersection outside the probe radius (bad teach, CAPTRON 13)
+		PERSIST_FAILED             // measured OK but the referencing could not be saved to the installation
 	}
 
 	public final Status status;

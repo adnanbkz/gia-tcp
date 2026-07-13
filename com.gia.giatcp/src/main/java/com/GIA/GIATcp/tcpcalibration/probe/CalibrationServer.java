@@ -72,6 +72,9 @@ public final class CalibrationServer {
 	private volatile boolean running;
 	private ServerSocket serverSocket;
 	private Thread acceptThread;
+	/** Open session sockets, so stop() can cut them instead of leaving them draining. */
+	private final java.util.Set<Socket> sessions =
+			java.util.concurrent.ConcurrentHashMap.newKeySet();
 
 	public synchronized void start() {
 		if (running) {
@@ -98,12 +101,24 @@ public final class CalibrationServer {
 		if (acceptThread != null) {
 			acceptThread.interrupt();
 		}
+		// Cut live sessions too: without this they drain up to the read timeout on the old
+		// bundle's classloader (and could still fire the sink) after a URCap update.
+		for (Socket s : sessions) {
+			try {
+				s.close();
+			} catch (IOException ignored) {
+				// best effort
+			}
+		}
+		sessions.clear();
+		resultSink = null;
 	}
 
 	private void acceptLoop() {
 		while (running) {
 			try {
 				Socket socket = serverSocket.accept();
+				sessions.add(socket);
 				Thread session = new Thread(() -> handleSession(socket), "gia-tcp-calib-session");
 				session.setDaemon(true);
 				session.start();
@@ -130,12 +145,16 @@ public final class CalibrationServer {
 				return;
 			}
 			TCPCalibrationResult result = new TCPCalibrationRunner(transport).calibrate(spec);
+			recordResult(spec.tcpId, result);
+			// Persist BEFORE answering: the program must not continue with OK while the
+			// referencing write is still pending (or failed) on the installation side.
+			result = persistIfRequested(spec, result);
 			transport.sendDone(result);
 			logger.debug("calibration server: session result {}", result.status);
-			recordResult(spec.tcpId, result);
-			maybePersist(spec, result);
 		} catch (IOException e) {
 			logger.debug("calibration server session error", e);
+		} finally {
+			sessions.remove(socket);
 		}
 	}
 
@@ -205,23 +224,35 @@ public final class CalibrationServer {
 	/**
 	 * Persists a successful run to the installation store when the program asked for it
 	 * (referencing). OUT_OF_TOLERANCE is still measured data, so it is stored too — the
-	 * referencing flow uses wide tolerances anyway. No-op if no sink is registered.
+	 * referencing flow uses wide tolerances anyway. When the write does not commit (no
+	 * sink registered, DataModel failure), the run degrades to PERSIST_FAILED so the
+	 * program never continues believing the TCP is referenced.
 	 */
-	private static void maybePersist(TCPCalibrationSpec spec, TCPCalibrationResult result) {
+	private static TCPCalibrationResult persistIfRequested(TCPCalibrationSpec spec, TCPCalibrationResult result) {
 		if (spec == null || !spec.persistToInstallation || spec.tcpId <= 0 || result.correction == null) {
-			return;
+			return result;
 		}
 		boolean measured = result.status == TCPCalibrationResult.Status.OK
 				|| result.status == TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
+		if (!measured) {
+			return result;
+		}
 		CalibrationResultSink sink = resultSink;
-		if (measured && sink != null) {
+		boolean committed = false;
+		if (sink != null) {
 			try {
-				sink.storeCalibration(spec.tcpId, result.correction, result.diameterMm, result.measuredPose);
-				logger.info("Referencing persisted for TCP {} (status {})", spec.tcpId, result.status);
+				committed = sink.storeCalibration(spec.tcpId, result.correction, result.diameterMm,
+						result.measuredPose);
 			} catch (RuntimeException e) {
 				logger.warn("Could not persist referencing for TCP {}", spec.tcpId, e);
 			}
 		}
+		if (!committed) {
+			logger.warn("Referencing for TCP {} was measured but NOT persisted", spec.tcpId);
+			return TCPCalibrationResult.error(TCPCalibrationResult.Status.PERSIST_FAILED);
+		}
+		logger.info("Referencing persisted for TCP {} (status {})", spec.tcpId, result.status);
+		return result;
 	}
 
 	private static void closeQuietly(ServerSocket sock) {

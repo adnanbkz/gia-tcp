@@ -303,6 +303,9 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 			case ORIENTATION_NOT_POSSIBLE: return t.t("TC_ST_ORIENT");
 			case INPUT_LOW_AT_CENTER:      return t.t("TC_ST_INPUT_LOW");
 			case IMMERSE_FAILED:           return t.t("TC_ST_IMMERSE");
+			case WRONG_POINT_COUNT:        return t.t("TC_ST_WRONG_EDGES");
+			case INTERSECT_TOO_FAR:        return t.t("TC_ST_INTERSECT_FAR");
+			case PERSIST_FAILED:           return t.t("TC_ST_PERSIST");
 			default:                       return s.name();
 		}
 	}

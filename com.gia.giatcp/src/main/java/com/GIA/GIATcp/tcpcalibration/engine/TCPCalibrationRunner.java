@@ -33,12 +33,12 @@ public final class TCPCalibrationRunner {
 			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_ROBOT_REPLY);
 		}
 		if (!c.valid()) {
-			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_INTERSECT);
+			return TCPCalibrationResult.error(TCPCalibrationResult.Status.WRONG_POINT_COUNT);
 		}
 		TCPCalibrationMaths.CenterResult centre =
 				TCPCalibrationMaths.computeCenter(c.poses, pStart, s.radiusMm / 1000.0);
 		if (centre.error != TCPCalibrationMaths.OK) {
-			return TCPCalibrationResult.error(TCPCalibrationResult.Status.NO_INTERSECT);
+			return TCPCalibrationResult.error(centreErrorStatus(centre.error));
 		}
 
 		// 2. Z search at the true centre. Failures carry the robot-reported reason so a bad
@@ -139,5 +139,17 @@ public final class TCPCalibrationRunner {
 
 	private static double[] offsetBaseZ(double[] pose, double dz) {
 		return new double[] { pose[0], pose[1], pose[2] + dz, pose[3], pose[4], pose[5] };
+	}
+
+	/** Distinct statuses per geometric failure (the legacy stack keeps -1/-2/-3 apart too). */
+	private static TCPCalibrationResult.Status centreErrorStatus(int error) {
+		switch (error) {
+			case TCPCalibrationMaths.ERR_WRONG_POINT_COUNT:
+				return TCPCalibrationResult.Status.WRONG_POINT_COUNT;
+			case TCPCalibrationMaths.ERR_INTERSECT_TOO_FAR:
+				return TCPCalibrationResult.Status.INTERSECT_TOO_FAR;
+			default:
+				return TCPCalibrationResult.Status.NO_INTERSECT;
+		}
 	}
 }

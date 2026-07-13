@@ -339,6 +339,12 @@ def gia_getStatusMsg():
     return "No corta ambos haces en la referencia / input low at reference"
   elif (tcpc__rtStatus == 7):
     return "Inmersion fallida: herramienta desgastada o ausente / immerse failed"
+  elif (tcpc__rtStatus == 8):
+    return "Numero de flancos incorrecto en el circulo / wrong edge count"
+  elif (tcpc__rtStatus == 9):
+    return "Interseccion fuera del circulo de sondeo / intersect too far"
+  elif (tcpc__rtStatus == 10):
+    return "El referenciado no se pudo guardar / referencing not persisted"
   end
   return "Estado " + to_str(tcpc__rtStatus)
 end

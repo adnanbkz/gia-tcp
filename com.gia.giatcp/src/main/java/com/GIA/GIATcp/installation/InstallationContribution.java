@@ -97,16 +97,19 @@ public class InstallationContribution implements InstallationNodeContribution, C
 
 	/**
 	 * Persists a calibration measured by a running program (Play). Marshals to the EDT
-	 * because it writes the DataModel and refreshes the view. {@link CalibrationResultSink}.
+	 * because it writes the DataModel and refreshes the view — SYNCHRONOUSLY, so the
+	 * {@link CalibrationServer} only answers OK to the robot once the write committed.
 	 */
 	@Override
-	public void storeCalibration(final int tcpId, final double[] correctionSi, final double diameterMm,
+	public boolean storeCalibration(final int tcpId, final double[] correctionSi, final double diameterMm,
 			final double[] measuredPoseSi) {
-		SwingUtilities.invokeLater(new Runnable() {
+		final boolean[] committed = { false };
+		Runnable write = new Runnable() {
 			@Override
 			public void run() {
 				try {
 					store.setCalibrationResult(tcpId, correctionSi, diameterMm, measuredPoseSi);
+					committed[0] = true;
 					view.refresh();
 					ReferencingListener l = referencingListener;
 					if (l != null) {
@@ -116,7 +119,17 @@ public class InstallationContribution implements InstallationNodeContribution, C
 					logger.warn("Failed to store referencing result for TCP {}", tcpId, e);
 				}
 			}
-		});
+		};
+		if (SwingUtilities.isEventDispatchThread()) {
+			write.run();
+		} else {
+			try {
+				SwingUtilities.invokeAndWait(write);
+			} catch (Exception e) {
+				logger.warn("Referencing persist for TCP {} did not complete", tcpId, e);
+			}
+		}
+		return committed[0];
 	}
 
 	// ---------------- lifecycle ----------------
