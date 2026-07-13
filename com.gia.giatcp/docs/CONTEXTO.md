@@ -307,6 +307,16 @@ ajuste RX/RY del stack nuevo es single-shot (los parámetros `iterator`/`accurac
 solo los usa el stack legacy — la iteración con re-centrado queda para cuando se valide XYZ en
 hardware). Resto en `docs/MEJORAS_PENDIENTES.md` (baja: 14-17; validación: 18-19; propuesta 20).
 
+### 2026-07-10 — Nodo de programa: cabecera compacta
+
+- El nodo cortaba la pestaña Básico a partir de "Ajuste de ángulo activo" (Iterador de
+  precisión y Desfase Z no cabían). Causa: la cabecera consumía ~160 px (logo 153×68 +
+  título + struts) antes de las pestañas.
+- Quitado el `JLabel` "GIA TCP" del nodo (PolyScope ya pinta el título del nodo encima →
+  salía duplicado). Logo reducido a `Ui.logoSmall()` (90×40, mismo aspecto 2.25:1) y pegado
+  a la esquina superior derecha del panel raíz (fuera del `content` con borde). El selector
+  de TCP comparte fila con el logo. Las tarjetas de instalación/wizard siguen con `Ui.logo()`.
+
 ---
 
 ## 6. Pendiente de validación en hardware real

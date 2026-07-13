@@ -10,8 +10,6 @@ import com.ur.urcap.api.contribution.ViewAPIProvider;
 import com.ur.urcap.api.contribution.program.swing.SwingProgramNodeView;
 import com.ur.urcap.api.domain.userinteraction.keyboard.KeyboardInputFactory;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JCheckBox;
@@ -23,10 +21,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.util.List;
 
@@ -77,38 +72,26 @@ public class ProgTcpActionView implements SwingProgramNodeView<ProgTcpActionCont
 		this.provider = provider;
 		this.t = Texts.from(viewApiProvider.getSystemAPI().getSystemSettings().getLocalization());
 		// PolyScope forbids setBorder() on the root URCap panel (it throws
-		// AuthorizationException), so all content goes in an inner bordered panel.
+		// AuthorizationException), so padding lives on the inner panels. PolyScope
+		// already shows the node title, so the header carries no "GIA TCP" text of
+		// its own: just the TCP selector plus the logo pinned to the top-right corner.
 		panel.setLayout(new BorderLayout());
-		JPanel content = new JPanel(new BorderLayout(8, 8));
-		content.setBorder(new EmptyBorder(10, 10, 10, 10));
-		panel.add(content, BorderLayout.CENTER);
 
-		// North: title bar + TCP selection + action selection, stacked top-down so they
-		// keep their natural height and the tabs below get the vertical space.
-		JPanel north = new JPanel();
-		north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
-
-		JPanel header = new JPanel(new BorderLayout());
-		header.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel title = new JLabel("GIA TCP");
-		title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
-		header.add(title, BorderLayout.WEST);
-		header.add(Ui.logo(), BorderLayout.EAST);
-		header.setMaximumSize(new Dimension(Integer.MAX_VALUE, header.getPreferredSize().height));
-		north.add(header);
-		north.add(Box.createVerticalStrut(10));
-
+		JPanel header = new JPanel(new BorderLayout(8, 0));
 		JPanel selectRow = new JPanel(new BorderLayout(8, 0));
-		selectRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		selectRow.setBorder(new EmptyBorder(6, 10, 0, 0));
 		selectRow.add(new JLabel(t.t("ACT_SELECT_TCP")), BorderLayout.WEST);
 		tcpCombo.addActionListener(e -> onTcpSelect());
 		selectRow.add(tcpCombo, BorderLayout.CENTER);
-		selectRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
-		north.add(selectRow);
-		north.add(Box.createVerticalStrut(8));
+		header.add(selectRow, BorderLayout.CENTER);
+		header.add(Ui.logoSmall(), BorderLayout.EAST);
+		panel.add(header, BorderLayout.NORTH);
+
+		JPanel content = new JPanel(new BorderLayout(6, 6));
+		content.setBorder(new EmptyBorder(4, 10, 6, 10));
+		panel.add(content, BorderLayout.CENTER);
 
 		JPanel actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-		actionRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actionRow.add(new JLabel(t.t("ACT_ACTION")));
 		rCheck.setText(t.t("ACT_CHECK"));
 		rValidate.setText(t.t("ACT_VALIDATE"));
@@ -123,10 +106,7 @@ public class ProgTcpActionView implements SwingProgramNodeView<ProgTcpActionCont
 		actionRow.add(rCheck);
 		actionRow.add(rValidate);
 		actionRow.add(rRecalibrate);
-		actionRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-		north.add(actionRow);
-
-		content.add(north, BorderLayout.NORTH);
+		content.add(actionRow, BorderLayout.NORTH);
 
 		// Center: the settings tabs take the remaining vertical space.
 		JTabbedPane tabs = new JTabbedPane();

@@ -26,6 +26,12 @@ public final class Ui {
 		return iconLabel("/icons/logoGIA405_180.png", 153, 68);
 	}
 
+	/** Smaller GIA wordmark for the program-node header, where vertical space is
+	 *  scarce. Same 2.25:1 aspect as {@link #logo()}. */
+	public static JLabel logoSmall() {
+		return iconLabel("/icons/logoGIA405_180.png", 90, 40);
+	}
+
 	/** A bold-font copy of a label, for form field captions and section headers. */
 	public static JLabel bold(String text) {
 		JLabel l = new JLabel(text);
