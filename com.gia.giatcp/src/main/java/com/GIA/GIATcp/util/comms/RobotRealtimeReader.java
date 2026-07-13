@@ -42,8 +42,10 @@ public final class RobotRealtimeReader {
 		this.robotIp = robotIp;
 	}
 
-	/** Reads one snapshot. Quiet on failure (leaves the previous snapshot/null in place). */
+	/** Reads one snapshot. Quiet on failure, but invalidates first: after a failed read
+	 *  the previous snapshot must not keep being served as if it were current. */
 	public void readNow() {
+		message = null;
 		Socket socket = new Socket();
 		try {
 			socket.connect(new InetSocketAddress(robotIp, RT_PORT), CONNECT_TIMEOUT_MS);

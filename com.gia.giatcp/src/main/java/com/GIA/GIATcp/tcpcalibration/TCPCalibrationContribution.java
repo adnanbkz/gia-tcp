@@ -333,22 +333,36 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 
 	@Override
 	public void openView() {
-		ensureTcpIdPinned();
+		ensureDefaultsPinned();
 		ensureErrorHandlingChild();
 		view.refresh(this);
 	}
 
 	/**
-	 * Pins the effective TCP id into the DataModel the first time the node is opened.
-	 * {@link #getTcpId()}'s fallback is dynamic (first existing slot), so without pinning a
-	 * node saved without an explicit selection silently switches TCP when a lower slot is
-	 * created later. CAPTRON instead leaves the node undefined (ctId = -1) until the user
-	 * picks; pinning keeps already-saved programs working while making the choice stable.
+	 * Pins the node's effective settings into the DataModel the first time it is opened
+	 * (version stamp {@link Const#K_ACT_MODEL_V}). Un-pinned values fall back to live
+	 * Const defaults, and those changed across versions (Approach Z 50→30 mm) — a saved
+	 * node must keep running with whatever it effectively uses today instead of silently
+	 * changing behaviour on upgrade. Also pins the TCP id, whose fallback is dynamic
+	 * (first existing slot): without it a node saved without an explicit selection
+	 * switches TCP when a lower slot is created later (CAPTRON keeps ctId = -1 instead).
 	 */
-	private void ensureTcpIdPinned() {
-		if (!model.isSet(Const.K_ACT_TCPID)) {
-			setTcpId(getTcpId());
+	private void ensureDefaultsPinned() {
+		if (model.get(Const.K_ACT_MODEL_V, 0) > 0) {
+			return;
 		}
+		edit(() -> {
+			model.set(Const.K_ACT_TCPID, getTcpId());
+			model.set(Const.K_ACT_ACTION, getAction());
+			model.set(Const.K_ACT_SPEED, getSpeed());
+			model.set(Const.K_ACT_APPROACHZ, getApproachZ());
+			model.set(Const.K_ACT_IMMERSEZ, getImmerseZ());
+			model.set(Const.K_ACT_SET_AFTER, isSetTcpAfter());
+			model.set(Const.K_ACT_ADJANGLE, isAdjustAngle());
+			model.set(Const.K_ACT_OFFZ, getOffsetZ());
+			model.set(Const.K_ACT_ERRH, isErrHandling());
+			model.set(Const.K_ACT_MODEL_V, 1);
+		});
 	}
 
 	@Override

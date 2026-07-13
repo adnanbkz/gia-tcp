@@ -113,8 +113,28 @@ public class ProgErrHandlingContribution implements ProgramNodeContribution {
 
 	@Override
 	public void openView() {
+		ensureDefaultsPinned();
 		ensurePlaceholderFolder();
 		view.update(this);
+	}
+
+	/**
+	 * Pins the retry settings the first time the node is opened (version stamp): the
+	 * retry-count default changed across versions (1 → 2, CAPTRON), and a saved node
+	 * relying on the live default would silently change behaviour on upgrade.
+	 */
+	private void ensureDefaultsPinned() {
+		if (model.get(Const.K_ERR_MODEL_V, 0) > 0) {
+			return;
+		}
+		undoRedoManager.recordChanges(new UndoableChanges() {
+			@Override
+			public void executeChanges() {
+				model.set(Const.K_ERR_RETRY_ENABLED, isRetryEnabled());
+				model.set(Const.K_ERR_RETRY_COUNT, getRetryCount());
+				model.set(Const.K_ERR_MODEL_V, 1);
+			}
+		});
 	}
 
 	@Override

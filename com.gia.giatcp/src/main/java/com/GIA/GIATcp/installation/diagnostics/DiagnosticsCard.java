@@ -64,6 +64,7 @@ public class DiagnosticsCard extends JPanel {
 	private final JButton stopBtn = new JButton();
 	private final JTextField runsField = new JTextField("5", 3);
 	private final JButton repeatBtn = new JButton();
+	private final JButton repeatStopBtn = new JButton();
 	private Texts t;
 
 	private final Map<Integer, JLabel> dots = new LinkedHashMap<Integer, JLabel>();
@@ -77,6 +78,10 @@ public class DiagnosticsCard extends JPanel {
 	private Thread poseThread;
 	private volatile boolean running;
 	private volatile double[] latestPose;
+	private volatile long latestPoseAtMs;
+	/** A pose older than this is treated as absent: after a 30003 read failure the last
+	 *  snapshot must not keep being logged as if it were the current position. */
+	private static final long POSE_STALE_MS = 2000;
 
 	public DiagnosticsCard(InstallationContribution contribution, InstallationView view) {
 		this.contribution = contribution;
@@ -154,6 +159,11 @@ public class DiagnosticsCard extends JPanel {
 		repeatBtn.setText(t.t("DIAG_REPEAT"));
 		repeatBtn.addActionListener(e -> onRepeatability());
 		measRow.add(repeatBtn);
+		repeatStopBtn.setText(t.t("BTN_STOP"));
+		// Off the EDT: halts the robot and unblocks the waiting worker (no-op when idle).
+		repeatStopBtn.addActionListener(e -> new Thread(
+				() -> contribution.stopRepeatability(), "gia-tcp-repeat-stop").start());
+		measRow.add(repeatStopBtn);
 		measRow.add(new JLabel(t.t("DIAG_REPEAT_HINT")));
 		measRow.setAlignmentX(LEFT_ALIGNMENT);
 		center.add(measRow);
@@ -273,6 +283,12 @@ public class DiagnosticsCard extends JPanel {
 		return n != null ? n : "code " + code;
 	}
 
+	/** Last realtime pose, or null when nothing fresh arrived within {@link #POSE_STALE_MS}. */
+	private double[] freshPose() {
+		double[] p = latestPose;
+		return p != null && System.currentTimeMillis() - latestPoseAtMs <= POSE_STALE_MS ? p : null;
+	}
+
 	public void startMonitor() {
 		if (running) {
 			return;
@@ -291,6 +307,7 @@ public class DiagnosticsCard extends JPanel {
 					double[] p = contribution.getLiveTcpPoseSi();
 					if (p != null) {
 						latestPose = p;
+						latestPoseAtMs = System.currentTimeMillis();
 					}
 					try {
 						Thread.sleep(POSE_PERIOD_MS);
@@ -338,7 +355,7 @@ public class DiagnosticsCard extends JPanel {
 			applyState(in.code, in.value);
 		}
 		// Pose from the cached realtime snapshot.
-		double[] p = latestPose;
+		double[] p = freshPose();
 		if (p == null) {
 			poseLabel.setText("X --- Y --- Z ---  mm    RX --- RY --- RZ ---  deg");
 		} else {
@@ -361,7 +378,7 @@ public class DiagnosticsCard extends JPanel {
 	}
 
 	private void logEdge(int code, boolean value) {
-		double[] p = latestPose;
+		double[] p = freshPose();
 		String dir = value ? "0->1 HIGH" : "1->0 LOW ";
 		String where;
 		if (p == null) {

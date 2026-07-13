@@ -31,6 +31,8 @@ public class CalibrationController {
 	private static final int READ_TIMEOUT_MS = 120000;
 
 	private final PrimaryScriptSender sender = new PrimaryScriptSender();
+	/** Socket of the calibration in progress; null when idle (Stop is then a no-op). */
+	private volatile ServerSocket activeServer;
 
 	/**
 	 * Sends the calibration program for the given TCP and blocks until the robot
@@ -50,6 +52,7 @@ public class CalibrationController {
 			server.bind(new java.net.InetSocketAddress(
 					java.net.InetAddress.getLoopbackAddress(), Const.CALIB_RETURN_PORT));
 			server.setSoTimeout(ACCEPT_TIMEOUT_MS);
+			activeServer = server;
 			if (!sender.sendRawPrimary(program)) {
 				logger.warn("Calibration program could not be sent to the primary interface (30001)");
 				return CalibrationResult.timeout();
@@ -67,12 +70,28 @@ public class CalibrationController {
 		} catch (IOException e) {
 			logger.debug("Calibration socket error", e);
 			return CalibrationResult.timeout();
+		} finally {
+			activeServer = null;
 		}
 	}
 
-	/** Aborts a running calibration by sending a halt to the primary interface. */
+	/**
+	 * Aborts the calibration in progress: halts the robot and closes the waiting socket
+	 * so the worker returns immediately (instead of draining the 120 s accept timeout
+	 * with the port still bound). No-op when nothing is running — Stop must never halt
+	 * a program this controller did not start.
+	 */
 	public void stop() {
+		ServerSocket server = activeServer;
+		if (server == null) {
+			return;
+		}
 		sender.sendRawPrimary("halt\n");
+		try {
+			server.close();
+		} catch (IOException ignored) {
+			// best effort
+		}
 	}
 
 	private String buildProgram(GiaTcp tcp, double[] refTcpPoseSi, boolean errInterrupt, int debugLvl) {

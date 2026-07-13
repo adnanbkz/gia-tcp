@@ -518,7 +518,13 @@ public class InstallationContribution implements InstallationNodeContribution, C
 	 */
 	public TCPCalibrationResult runTestCalibration(GiaTcp tcp) {
 		TCPCalibrationSpec spec = buildTestSpec(tcp);
-		TCPCalibrationResult r = new TCPCalibrationRunner(new SecondaryProbeTransport()).calibrate(spec);
+		TCPCalibrationResult r;
+		testProbeRunning = true;
+		try {
+			r = new TCPCalibrationRunner(new SecondaryProbeTransport()).calibrate(spec);
+		} finally {
+			testProbeRunning = false;
+		}
 		CalibrationServer.recordResult(tcp.id, r);
 		boolean measured = r.status == TCPCalibrationResult.Status.OK
 				|| r.status == TCPCalibrationResult.Status.OUT_OF_TOLERANCE;
@@ -533,15 +539,23 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		return r;
 	}
 
+	/** True while a live test probe is between send and reply (gates the Stop button). */
+	private volatile boolean testProbeRunning;
+
 	/**
 	 * Aborts a live test probe (CAPTRON parity for the Stop button): a normal program sent
 	 * over Secondary preempts the running probe program and stops the motion; the extra
 	 * reply line unblocks the transport, which is otherwise waiting on its return socket.
-	 * Blocking socket I/O — call off the EDT.
+	 * No-op when no test is running — the stop program would preempt whatever program the
+	 * robot happens to be executing. Blocking socket I/O — call off the EDT.
 	 */
 	public void stopTestCalibration() {
+		if (!testProbeRunning) {
+			return;
+		}
 		SecondaryProbeTransport.sendStop(new SecondaryScriptSender());
 	}
+
 
 	private TCPCalibrationSpec buildTestSpec(GiaTcp tcp) {
 		CalibParams p = tcp.params;

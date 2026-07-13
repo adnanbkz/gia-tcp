@@ -115,6 +115,9 @@ public final class Const {
 	public static final String K_ACT_CHILD_DONE = "actChildDone"; // boolean: If-Error child inserted
 	public static final String K_ACT_USE_CUSTOM_VAR = "actUseCustomVar"; // boolean
 	public static final String K_ACT_CUSTOM_VAR = "actCustomVar";        // String
+	// Version stamp: once set, the node's effective settings are pinned in the DataModel,
+	// so a later change of a Const default can never silently alter a saved program.
+	public static final String K_ACT_MODEL_V = "actModelV";              // int
 	// tolerances: legacy single symmetric +/- band per axis; kept because it seeds the
 	// defaults of the asymmetric Min/Max keys (CAPTRON-style) that replaced it in the UI.
 	public static final String K_TOL = "actTol%s"; // %s in {X,Y,Z,D}; +/- tolerance in mm
@@ -138,6 +141,7 @@ public final class Const {
 	public static final String K_ERR_RETRY_COUNT = "errRetryCount";     // int
 	public static final int DEF_ERR_RETRY_COUNT = 2; // CAPTRON default for "Try again x times"
 	public static final String K_ERR_FOLDER_DONE = "errFolderDone";     // boolean: placeholder folder inserted
+	public static final String K_ERR_MODEL_V = "errModelV";             // int: settings pinned (see K_ACT_MODEL_V)
 
 	// Default recalibration variable name written by the script
 	public static final String DEFAULT_RECALIB_VAR = "giaActionTCP";

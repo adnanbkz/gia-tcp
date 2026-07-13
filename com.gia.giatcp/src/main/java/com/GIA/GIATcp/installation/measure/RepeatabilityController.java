@@ -35,6 +35,8 @@ public final class RepeatabilityController {
 	private static final int READ_TIMEOUT_MS = 120000;
 
 	private final PrimaryScriptSender sender = new PrimaryScriptSender();
+	/** Socket of the test in progress; null when idle (Stop is then a no-op). */
+	private volatile ServerSocket activeServer;
 
 	public RepeatabilityResult run(GiaTcp tcp, double[] refTcpPoseSi, int runs, boolean errInterrupt, int debugLvl) {
 		int n = Math.max(1, runs);
@@ -45,6 +47,7 @@ public final class RepeatabilityController {
 			server.bind(new InetSocketAddress(
 					java.net.InetAddress.getLoopbackAddress(), Const.CALIB_RETURN_PORT));
 			server.setSoTimeout(ACCEPT_TIMEOUT_MS);
+			activeServer = server;
 			if (!sender.sendRawPrimary(program)) {
 				logger.warn("Repeatability program could not be sent to the primary interface (30001)");
 				return RepeatabilityResult.notReceived(n);
@@ -72,12 +75,27 @@ public final class RepeatabilityController {
 		} catch (IOException e) {
 			logger.debug("Repeatability socket error", e);
 			return RepeatabilityResult.notReceived(n);
+		} finally {
+			activeServer = null;
 		}
 	}
 
-	/** Aborts a running test by halting the primary interface. */
+	/**
+	 * Aborts the test in progress: halts the robot and closes the waiting socket so the
+	 * worker returns immediately. No-op when nothing is running — Stop must never halt
+	 * a program this controller did not start.
+	 */
 	public void stop() {
+		ServerSocket server = activeServer;
+		if (server == null) {
+			return;
+		}
 		sender.sendRawPrimary("halt\n");
+		try {
+			server.close();
+		} catch (IOException ignored) {
+			// best effort
+		}
 	}
 
 	/** Parses "run,status,xMm,yMm,zMm,diamMm"; returns [x,y,z,diam] only if status==0, else null. */
