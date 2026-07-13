@@ -433,8 +433,19 @@ public class InstallationContribution implements InstallationNodeContribution, C
 		if (!isRefResolvable(tcp.refTcp)) {
 			return false;
 		}
-		String program = "set_tcp(" + UrScript.pose(resolveTcpPoseSi(tcp.refTcp)) + ")\n";
-		return new SecondaryScriptSender().send(program);
+		return activateTcp(resolveTcpPoseSi(tcp.refTcp));
+	}
+
+	/**
+	 * Activates an arbitrary TCP offset (SI) on the robot over the Secondary interface
+	 * (e.g. the node action's calibrated TCP before a guided move). Blocking socket I/O —
+	 * call off the EDT. Returns false when unreachable (Local mode).
+	 */
+	public boolean activateTcp(double[] poseSi) {
+		if (poseSi == null) {
+			return false;
+		}
+		return new SecondaryScriptSender().send("set_tcp(" + UrScript.pose(poseSi) + ")\n");
 	}
 
 	private Pose toPose(double[] si) {

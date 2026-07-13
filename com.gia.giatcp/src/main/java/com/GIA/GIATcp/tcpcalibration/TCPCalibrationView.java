@@ -418,9 +418,10 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 	}
 
 	/**
-	 * Opens the guarded move screen towards the action start/approach pose. The reference
-	 * TCP is activated first (as the probe does); if that fails (Local mode), the user is
-	 * warned that the move screen will use whatever TCP is currently active.
+	 * Opens the guarded move screen towards the action start/approach pose. The action's
+	 * TCP is activated first (calibrated TCP for Check/Validate, reference for
+	 * Recalibrate — same as the generated program); if that fails (Local mode), the user
+	 * is warned that the move screen will use whatever TCP is currently active.
 	 */
 	private void moveToActionPose(final boolean approach) {
 		final TCPCalibrationContribution c = provider.get();
@@ -433,11 +434,12 @@ public class TCPCalibrationView implements SwingProgramNodeView<TCPCalibrationCo
 		final InstallationContribution inst = c.getInstallation();
 		final GiaTcp tcp = c.getSelectedTcp();
 		final double[] pose = approach ? c.actionApproachPose() : c.actionStartPose();
+		final double[] activeTcp = c.actionActiveTcp();
 		if (inst == null || tcp == null || pose == null) {
 			return;
 		}
 		new Thread(() -> {
-			final boolean tcpActivated = inst.activateReferenceTcp(tcp);
+			final boolean tcpActivated = inst.activateTcp(activeTcp);
 			SwingUtilities.invokeLater(() -> {
 				if (!tcpActivated) {
 					int go = JOptionPane.showConfirmDialog(calibrateNow, t.t("ACT_MOVE_TCP_WARN", tcp.refTcp),

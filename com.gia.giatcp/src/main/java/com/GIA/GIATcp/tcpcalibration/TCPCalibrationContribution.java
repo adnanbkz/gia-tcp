@@ -117,6 +117,26 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		return TCPCalibrationMaths.poseTrans(start, new double[] { 0, 0, dz, 0, 0, 0 });
 	}
 
+	/**
+	 * TCP offset (SI) active while the configured action probes (CAPTRON tcp_action A(c)):
+	 * reference + stored correction for Check/Validate (c.A()), the plain reference for
+	 * Recalibrate and any referencing run (c.T()). Null when the reference is unresolvable.
+	 */
+	public double[] actionActiveTcp() {
+		InstallationContribution inst = getInstallation();
+		GiaTcp tcp = getSelectedTcp();
+		if (inst == null || tcp == null || !inst.isRefResolvable(tcp.refTcp)) {
+			return null;
+		}
+		boolean persist = isPersistReference() && getAction() != Const.ACTION_CHECK;
+		return activeTcpFor(inst.resolveTcpPoseSi(tcp.refTcp), tcp, getAction(), persist);
+	}
+
+	private static double[] activeTcpFor(double[] refTcpPose, GiaTcp tcp, int action, boolean persist) {
+		boolean useCalibrated = action != Const.ACTION_RECALIBRATE && !persist;
+		return useCalibrated ? TCPCalibrationMaths.correctedTcp(refTcpPose, tcp.correction) : refTcpPose;
+	}
+
 	/** Wraps every DataModel / program-tree mutation in an UndoableChanges scope (required). */
 	private void edit(final Runnable change) {
 		undoRedoManager.recordChanges(new UndoableChanges() {
@@ -414,6 +434,13 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		}
 		CalibParams p = tcp.params;
 		double[] refPose = inst.resolveTcpPoseSi(tcp.refTcp);
+		// TCP active during the action (CAPTRON tcp_action/C.java A(c): c.A() for Check/
+		// Validate, c.T() for Recalibrate). Check/Validate exercise the CURRENT calibrated
+		// TCP (reference + stored correction): after a real drift was measured and stored,
+		// the tip still lands on the beam cross and Validate reports the RESIDUAL error,
+		// not the already-known drift. Recalibrate — and any referencing run — measures
+		// from the reference TCP, because it re-establishes the correction from scratch.
+		double[] activeTcp = activeTcpFor(refPose, tcp, action, persist);
 
 		double factor = getSpeed() == 0 ? 0.5 : (getSpeed() == 2 ? 1.5 : 1.0);
 		String acc = UrScript.num(p.accelMmS2 / 1000.0);
@@ -456,9 +483,12 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		// INIT;pRef;refTcp;radiusMm;tolXmm;tolYmm;tolZmm;adj;offZmm;maxRx;maxRy;diamOffMm;tcpId;persist;tolDmm;diamNomMm;pStart;tolMinX;tolMaxX;tolMinY;tolMaxY;tolMinZ;tolMaxZ;tolMinD;tolMaxD
 		// pRef (correction reference) is the pose measured at referencing when there is one
 		// (CAPTRON h()); the circle still runs around the taught centre (pStart, CAPTRON j()).
-		// The legacy symmetric fields stay for wire compatibility; the server prefers the
-		// trailing Min/Max fields when present.
-		String initLine = "INIT;" + UrScript.poseCsv(tcp.correctionRefPose()) + ";" + UrScript.poseCsv(refPose)
+		// The TCP base is the one active while probing (activeTcp): the runner's corrected
+		// TCP is base·correction, i.e. an improved calibrated TCP for Validate and a fresh
+		// correction from the reference for Recalibrate/referencing (CAPTRON cap_calibXYZ
+		// receives c.A() or c.T() the same way). The legacy symmetric fields stay for wire
+		// compatibility; the server prefers the trailing Min/Max fields when present.
+		String initLine = "INIT;" + UrScript.poseCsv(tcp.correctionRefPose()) + ";" + UrScript.poseCsv(activeTcp)
 				+ ";" + UrScript.num(p.radiusMm) + ";" + tolX + ";" + tolY
 				+ ";" + tolZ + ";" + adj + ";" + UrScript.num(getOffsetZ())
 				+ ";" + UrScript.num(p.maxAngleRxDeg) + ";" + UrScript.num(p.maxAngleRyDeg)
@@ -477,11 +507,10 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		if (restoreTcp) {
 			writer.appendLine("giaTcpBak = get_tcp_offset()");
 		}
-		// Probe with the reference TCP active. CAPTRON anchors Check/Validate above the
-		// referenced pose (h()) and Recalibrate above the taught centre (j()). A referencing
-		// run (persist) RE-ESTABLISHES the baseline, so it always anchors on the taught
-		// centre — the old reference must play no role in it.
-		writer.appendLine("set_tcp(" + UrScript.pose(refPose) + ")");
+		// CAPTRON anchors Check/Validate above the referenced pose (h()) and Recalibrate
+		// above the taught centre (j()). A referencing run (persist) RE-ESTABLISHES the
+		// baseline, so it always anchors on the taught centre — the old reference must
+		// play no role in it.
 		double[] anchor = action == Const.ACTION_RECALIBRATE || persist
 				? tcp.centerPose : tcp.correctionRefPose();
 		writer.appendLine("giaTcpApproach = pose_trans(" + UrScript.pose(anchor)
@@ -500,6 +529,9 @@ public class TCPCalibrationContribution implements ProgramNodeContribution {
 		writer.appendLine("giaTcpErrCount = 0");
 		writer.appendLine("global giaTcpOk = False");
 		writer.whileCondition("not giaTcpOk");
+		// Activated INSIDE the loop: an If-Error child may change the TCP during recovery,
+		// and the next attempt must probe with the intended one again.
+		writer.appendLine("set_tcp(" + UrScript.pose(activeTcp) + ")");
 		writer.appendLine("movel(giaTcpApproach, a=" + accApp + ", v=" + velApp + ")");
 		if (action == Const.ACTION_CHECK) {
 			// Light check (CAPTRON Check): no probing - verify the tool still cuts both
