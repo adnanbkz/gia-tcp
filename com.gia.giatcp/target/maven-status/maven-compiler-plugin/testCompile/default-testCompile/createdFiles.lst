@@ -1,3 +1,4 @@
+com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerStatusTest.class
 com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerZFailureTest.class
 com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerDiameterTest$1.class
 com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerOrientationTest.class
@@ -13,3 +14,4 @@ com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerZFailureTest$FailingZTr
 com/GIA/GIATcp/tcpcalibration/probe/CalibCsvZParseTest.class
 com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerRefPoseTest$RecordingTransport.class
 com/GIA/GIATcp/installation/calib/CalibrationResultParseTest.class
+com/GIA/GIATcp/tcpcalibration/engine/TCPCalibrationRunnerStatusTest$FixedTransport.class

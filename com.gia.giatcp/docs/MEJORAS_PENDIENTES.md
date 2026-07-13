@@ -93,11 +93,14 @@ listener pasivo recargaba la selección en vez del TCP esperado.
   persiste el referenciado de ese TCP (`InstallationContribution.ReferencingListener`). El
   botón Parar cancela la espera. Cero cambios de protocolo.
 
-## Auditoría externa 2026-07-13 (hallazgos verificados, pendientes)
+## Auditoría externa 2026-07-13 — TODO APLICADO (misma fecha)
 
 Informe completo en `docs/AUDITORIA_TCP_FABLE5.md`; verificación propia contra código y
-decompilado en CONTEXTO (entrada 2026-07-13). Corregidos en el momento: referenciado con
+decompilado en CONTEXTO (entradas 2026-07-13). Primera pasada (v10): referenciado con
 corrección identidad, RX/RY anclado en pSearchZ, tcpId materializado, 5510 endurecido.
+Segunda pasada (v11): items 28-37, todos aplicados — se conservan abajo como registro del
+razonamiento; el detalle de cada solución está en CONTEXTO. Tras actualizar: re-referenciar
+cada TCP (item 19) — obligatorio ya por v10 y reforzado por la captura Z al flanco (29).
 
 28. **Check/Validate con el TCP calibrado activo** (CAPTRON `tcp_action/C.java:351-359` usa
     c.A() para Check/Validate; nosotros `set_tcp(refTcp)` siempre). Con la herramienta sin

@@ -307,6 +307,41 @@ ajuste RX/RY del stack nuevo es single-shot (los parámetros `iterator`/`accurac
 solo los usa el stack legacy — la iteración con re-centrado queda para cuando se valide XYZ en
 hardware). Resto en `docs/MEJORAS_PENDIENTES.md` (baja: 14-17; validación: 18-19; propuesta 20).
 
+### 2026-07-13 — Auditoría, segunda pasada: items 28-37 aplicados (bloques 2-5)
+
+Con el bloque 1 cerrado (entrada siguiente), se aplicaron los diez items restantes:
+
+- **28 — Check/Validate con el TCP calibrado** (commit propio). Confirmado en el decompilado:
+  `tcp_action/C.java A(c)` usa c.A() (calibrado) para Check/Validate y c.T() (referencia)
+  para Recalibrate, y el nodo runtime de CAPTRON NO persiste (matemática runtime 100%
+  URScript; c.A() solo cambia desde la instalación) → sin persistencia runtime nueva.
+  `generateScript` activa `activeTcp = refTcp·corrección_guardada` para Check/Validate
+  (Validate reporta el error RESIDUAL; tras una deriva corregida ya no falla para siempre)
+  y refTcp para Recalibrate/persist; la base del INIT es el mismo activeTcp; `set_tcp`
+  DENTRO del while (If-Error ya no contamina el siguiente intento); Move Start/Approach
+  activan `actionActiveTcp()`.
+- **33+35+36 — servidor 5512.** Persistencia ANTES del OP_DONE con sink confirmable
+  (`storeCalibration` devuelve boolean, invokeAndWait); si no comitea → nuevo estado
+  `PERSIST_FAILED` (10). Estados finos `WRONG_POINT_COUNT` (8) e `INTERSECT_TOO_FAR` (9)
+  al final del enum (ordinales = protocolo), mapeados en runner/gia_getStatusMsg/vistas
+  con textos ES/EN. `stop()` cierra también las sesiones aceptadas y limpia el sink.
+- **32+34+37 — Stop/defaults/Diagnostics.** Los controllers legacy guardan el socket de la
+  sesión activa: Stop es no-op sin calibración en curso y cierra el 5510 para desbloquear
+  el accept (antes 120 s ligado); el stop del test live gated por `testProbeRunning`;
+  botón Stop de repetibilidad en Diagnostics. Settings efectivos del nodo y del If-Error
+  fijados al primer openView (sellos `actModelV`/`errModelV`). La pose realtime caduca a
+  los 2 s y el reader invalida el snapshot al empezar cada lectura.
+- **29+30+31 — metrología/wizard.** `pz` capturado AL flanco (sleep solo settle; desviación
+  consciente de CAPTRON, estrictamente mejor — re-referenciar tras actualizar).
+  `meanDiameter` proyecta cada cuerda perpendicular a la dirección de su haz (la cuerda
+  directa se inflaba con el haz descentrado; +0,19 mm con Ø1,2/R6/b=3). Overrun default
+  10→**15°** (CAPTRON; el arco bloqueado con hilo a R6 es 11,5°), Search Z mínimo 3→**6 mm**
+  (descoplanaridad + teach), y aviso `WIZ_OVERRUN_WARN` en el wizard
+  (`Const.minOverrunForTool` = 2·asen((Ø/2)/R)). Docs (montaje/WIKI/README) actualizados.
+
+Tests: **52 verdes**. Release `v11_auditoria-items-28-37`. Al instalar v10/v11:
+**re-referenciar cada TCP** (item 19).
+
 ### 2026-07-13 — Auditoría externa verificada + fixes SEV-1 (bloque 1)
 
 Auditoría externa (Codex) en `docs/AUDITORIA_TCP_FABLE5.md`, verificada hallazgo a hallazgo

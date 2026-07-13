@@ -135,7 +135,7 @@ Cada FGL 50: conector **M8, 4 pines, PNP**. Pinout estándar (confirmar con la h
 | Radio de sondeo      | 6 mm              | Ø círculo 12 mm, para la punta del hilo; con boquilla subir a ≥13–16 mm (regla del punto 1.4) |
 | Velocidad de sondeo  | 30 mm/s           | Bajar para más precisión de flanco en hardware real |
 | Aceleración          | 100 mm/s²         | |
-| Overrun              | 10°               | Margen angular del círculo; no bajar con radios pequeños |
+| Overrun              | 15°               | Margen angular del círculo (default CAPTRON); debe cubrir el arco bloqueado completo 2·asen((Ø útil/2)/radio) — con hilo Ø1,2 y radio 6 son ~11,5° |
 | Search Z             | 8 mm              | Recorrido de retracción para liberar los haces |
 | Approach Z           | 30 mm             | Aproximación desde el lado seguro antes del sondeo runtime |
 | Immerse Z            | 5 mm              | Vuelta a través del plano de haces para capturar Z |

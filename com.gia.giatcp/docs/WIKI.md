@@ -114,7 +114,7 @@ Defaults actuales (dimensionados para sondear la punta del hilo):
 | Diametro del circulo | 12 mm |
 | Velocidad | 30 mm/s |
 | Aceleracion | 100 mm/s2 |
-| Overrun | 10 grados |
+| Overrun | 15 grados |
 | Search Z | 8 mm |
 | Approach Z | 30 mm |
 | Immerse Z | 5 mm |
@@ -124,7 +124,7 @@ Radio minimo (fisica del armado del hilo de flancos): ambos haces deben quedar l
 vez para armar la captura, y sobre el circulo eso solo pasa cerca de las bisectrices, asi que
 radio > (radio de herramienta + medio ancho de haz + margen) / sen 45. Con hilo Ø1.2 el
 default de 6 mm sobra; para sondear una boquilla Ø16-20 hay que subir el radio a >= ~13-16 mm
-en el wizard. El overrun de 10 grados no debe bajarse con radios pequenos. Los TCPs ya
+en el wizard. El overrun (default 15 grados) debe cubrir el arco bloqueado 2·asen((Ø/2)/R); el wizard avisa si no llega. Los TCPs ya
 creados conservan sus valores guardados: los defaults nuevos solo aplican a TCPs nuevos.
 
 Con el default CAPTRON (`invertZ=false`), el montaje esperado top-down con `+Z` de herramienta hacia abajo aproxima y retrae en `-toolZ` (hacia arriba), y la inmersion vuelve en `+toolZ` (hacia abajo). Activar `invertZ` invierte esos tres sentidos.

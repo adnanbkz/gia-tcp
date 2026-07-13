@@ -89,3 +89,4 @@ com/GIA/GIATcp/tcpcalibration/TCPCalibrationContribution$2.class
 com/GIA/GIATcp/util/Ui$1.class
 com/GIA/GIATcp/installation/diagnostics/DiagnosticsCard$2.class
 com/GIA/GIATcp/installation/calib/CalibrationResult.class
+com/GIA/GIATcp/program/errhandling/ProgErrHandlingContribution$4.class
