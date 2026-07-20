@@ -22,8 +22,9 @@
 
 ## Aplicadas (2026-07-07) — prioridad media completa
 
-- ~~6. Validación de rangos en el wizard~~: clamp por parámetro (estilo CAPTRON) + aviso
-  físico del radio mínimo (`Const.minRadiusForTool`).
+- ~~6. Validación de rangos en el wizard~~: clamp por parámetro (estilo CAPTRON). El aviso
+  físico del radio mínimo se retiró el 2026-07-20 (fórmula no accionable para el soldador);
+  la protección real son los clamps `MIN_`/`MAX_` de `Const`.
 - ~~7. Tolerancias min/max asimétricas~~: bandas [Mín, Máx] por eje y Ø en el nodo; INIT
   ampliado con 8 campos de cola; runner con `withinTolAsym` y banda direccional de Ø.
 - ~~8. Columna "Previous"~~: última desviación X/Y/Z y último Ø sondeado por TCP

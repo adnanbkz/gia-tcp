@@ -93,27 +93,10 @@ public final class Const {
 	public static final int MIN_ITER = 1, MAX_ITER = 10;
 	public static final double MIN_OFFZ_MM = 1.0, MAX_OFFZ_MM = 20.0;
 	public static final double MIN_ACCURACY_DEG = 0.05, MAX_ACCURACY_DEG = 5.0;
-	// Radius floor physics (see DEF_RADIUS_MM): beam half-width + teach margin over sin 45.
-	public static final double RADIUS_RULE_MARGIN_MM = 1.5;
-	public static final double RADIUS_RULE_WIRE_DIAM_MM = 1.2; // assumed tool Ø when no real diameter set
-
-	/** Minimum probe radius (mm) for a tool of {@code toolDiamMm} to arm the edge capture. */
-	public static double minRadiusForTool(double toolDiamMm) {
-		double d = toolDiamMm > 0 ? toolDiamMm : RADIUS_RULE_WIRE_DIAM_MM;
-		return (d / 2.0 + RADIUS_RULE_MARGIN_MM) / Math.sin(Math.toRadians(45));
-	}
-
-	/**
-	 * Minimum overrun (deg) that guarantees 4 edges per beam for ANY beam phase: the tool
-	 * blocks an arc of 2·asin((Ø/2)/radius) around each crossing, and when the circle
-	 * starts inside that arc the missed entry edge is only recovered by overrunning the
-	 * full arc past the start point.
-	 */
-	public static double minOverrunForTool(double toolDiamMm, double radiusMm) {
-		double d = toolDiamMm > 0 ? toolDiamMm : RADIUS_RULE_WIRE_DIAM_MM;
-		double ratio = radiusMm > 0 ? Math.min(1.0, (d / 2.0) / radiusMm) : 1.0;
-		return Math.toDegrees(2 * Math.asin(ratio));
-	}
+	// The radius/overrun geometry rules that justify the defaults above are documented on
+	// DEF_RADIUS_MM and DEF_OVERRUN_DEG. They are NOT surfaced as wizard warnings: the
+	// operator is a welder, and a formula he cannot act on is noise. The MIN_/MAX_ clamps
+	// are what actually keeps a typo out of the probe.
 
 	// ----- Program-node (GIA TCP) data-model keys -----
 	public static final String K_ACT_TCPID = "actTcpId";       // int 1..30

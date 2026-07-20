@@ -401,6 +401,24 @@ recalibraciones de runtime). Release `v10_fixes-auditoria-sev1`.
 - Regla: en este wizard **todo paso ancla su contenido en `NORTH`**; un panel de layout centrante
   como raíz de tarjeta se descoloca en cuanto otra tarjeta crece.
 
+### 2026-07-20 — Diagnóstico alineado y fuera los avisos con fórmulas
+
+- **Diagnóstico**: la fila de repetibilidad empezaba con "Repeticiones: [5]", así que los botones
+  "Test de repetibilidad"/"Parar" arrancaban a una x arbitraria, sin relación con los de arriba.
+  Las dos filas eran `FlowLayout` independientes → imposible que cuadraran. Ahora ambas viven en
+  un único `GridBagLayout` de 4 columnas: arriba Iniciar/Parar/Mover/Borrar (una por columna),
+  el selector de repeticiones en su propia línea, y debajo los dos botones de repetibilidad
+  ocupando 2 columnas cada uno → quedan alargados y alineados exactamente con los de arriba.
+- **Wizard paso 5/7**: eliminados los avisos `WIZ_RADIUS_WARN` y `WIZ_OVERRUN_WARN` (y sus claves
+  en ambos idiomas, y los helpers `Const.minRadiusForTool`/`minOverrunForTool` que quedaban
+  muertos). El operador es un soldador: "arco bloqueado: 2·asen((Ø útil/2)/radio)" no es
+  accionable para él, solo ruido.
+- **Regla de producto**: la UI del wizard no muestra reglas de física ni fórmulas. Lo que protege
+  de verdad los valores son los clamps `MIN_`/`MAX_` de `Const` (siguen intactos), y las
+  derivaciones viven documentadas en los comentarios de `DEF_RADIUS_MM`/`DEF_OVERRUN_DEG` y en
+  `montaje_calibrador_2sensores.md`. Los avisos que SÍ se quedan son los accionables, tipo
+  `TC_ISSUE_PREFIX` ("no está listo para ejecutar: ...").
+
 ---
 
 ## 6. Pendiente de validación en hardware real

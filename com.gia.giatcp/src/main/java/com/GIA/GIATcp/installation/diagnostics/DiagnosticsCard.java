@@ -25,7 +25,10 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -136,7 +139,15 @@ public class DiagnosticsCard extends JPanel {
 		center.add(poseLabel);
 		center.add(spacer(8));
 
-		JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+		// One grid for both action rows so the columns line up: the repeatability pair
+		// spans the same width as the two buttons above it instead of starting wherever
+		// the "Repeticiones:" label happened to end.
+		JPanel actions = new JPanel(new GridBagLayout());
+		GridBagConstraints c = new GridBagConstraints();
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.insets = new Insets(0, 0, 6, 6);
+
 		startBtn.setText(t.t("DIAG_START"));
 		startBtn.addActionListener(e -> startMonitor());
 		stopBtn.setText(t.t("BTN_STOP"));
@@ -145,28 +156,56 @@ public class DiagnosticsCard extends JPanel {
 		moveBtn.addActionListener(e -> onMoveToCenter());
 		JButton clearBtn = new JButton(t.t("DIAG_CLEAR_LOG"));
 		clearBtn.addActionListener(e -> log.setText(""));
-		buttons.add(startBtn);
-		buttons.add(stopBtn);
-		buttons.add(moveBtn);
-		buttons.add(clearBtn);
-		buttons.setAlignmentX(LEFT_ALIGNMENT);
-		center.add(buttons);
+		c.gridy = 0;
+		c.gridx = 0;
+		actions.add(startBtn, c);
+		c.gridx = 1;
+		actions.add(stopBtn, c);
+		c.gridx = 2;
+		actions.add(moveBtn, c);
+		c.gridx = 3;
+		actions.add(clearBtn, c);
 
-		JPanel measRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-		measRow.add(new JLabel(t.t("DIAG_RUNS")));
+		// Runs selector on its own line, so the buttons below start at the left edge.
 		Ui.wireInteger(runsField, kf(), v -> { });
-		measRow.add(runsField);
+		c.gridy = 1;
+		c.gridx = 0;
+		c.fill = GridBagConstraints.NONE;
+		actions.add(new JLabel(t.t("DIAG_RUNS")), c);
+		c.gridx = 1;
+		actions.add(runsField, c);
+
 		repeatBtn.setText(t.t("DIAG_REPEAT"));
 		repeatBtn.addActionListener(e -> onRepeatability());
-		measRow.add(repeatBtn);
 		repeatStopBtn.setText(t.t("BTN_STOP"));
 		// Off the EDT: halts the robot and unblocks the waiting worker (no-op when idle).
 		repeatStopBtn.addActionListener(e -> new Thread(
 				() -> contribution.stopRepeatability(), "gia-tcp-repeat-stop").start());
-		measRow.add(repeatStopBtn);
-		measRow.add(new JLabel(t.t("DIAG_REPEAT_HINT")));
-		measRow.setAlignmentX(LEFT_ALIGNMENT);
-		center.add(measRow);
+		c.gridy = 2;
+		c.gridx = 0;
+		c.gridwidth = 2;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		actions.add(repeatBtn, c);
+		c.gridx = 2;
+		actions.add(repeatStopBtn, c);
+
+		c.gridy = 3;
+		c.gridx = 0;
+		c.gridwidth = 4;
+		c.fill = GridBagConstraints.NONE;
+		actions.add(new JLabel(t.t("DIAG_REPEAT_HINT")), c);
+
+		// Filler column: without it GridBagLayout centres the whole grid in the card.
+		c.gridy = 0;
+		c.gridx = 4;
+		c.gridwidth = 1;
+		c.weightx = 1;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		actions.add(javax.swing.Box.createHorizontalGlue(), c);
+
+		actions.setAlignmentX(LEFT_ALIGNMENT);
+		actions.setMaximumSize(new Dimension(Integer.MAX_VALUE, actions.getPreferredSize().height));
+		center.add(actions);
 
 		add(center, BorderLayout.CENTER);
 
