@@ -386,6 +386,21 @@ recalibraciones de runtime). Release `v10_fixes-auditoria-sev1`.
   a la esquina superior derecha del panel raíz (fuera del `content` con borde). El selector
   de TCP comparte fila con el logo. Las tarjetas de instalación/wizard siguen con `Ui.logo()`.
 
+### 2026-07-20 — Wizard paso 2/7: entradas X/Y descolgadas al centro
+
+- Las dos filas (Entrada X / Entrada Y) aparecían flotando abajo a la derecha en vez de bajo el
+  título "Paso (2/7) - Seleccionar entradas".
+- Causa: `buildIoStep()` era el único paso con un `GridBagLayout` pelado como panel raíz. Sin
+  ninguna celda con `weightx/weighty`, GridBagLayout **centra la rejilla entera** en el contenedor.
+  Y como los pasos viven en un `CardLayout`, todas las tarjetas se dibujan al tamaño de la mayor
+  (el paso de parámetros) → las dos filas quedaban centradas en un área muy grande. Empeoró al
+  crecer el paso de parámetros con el aviso de overrun (item 31).
+- Fix: rejilla con columna de relleno (`weightx=1` + glue) para empujar el contenido a la
+  izquierda, y el conjunto en `BorderLayout.NORTH` para fijarlo arriba, igual que hacen el resto
+  de pasos (`buildRefStep`, `buildCenterStep`, `buildParamStep`, `buildReferencingStep`).
+- Regla: en este wizard **todo paso ancla su contenido en `NORTH`**; un panel de layout centrante
+  como raíz de tarjeta se descoloca en cuanto otra tarjeta crece.
+
 ---
 
 ## 6. Pendiente de validación en hardware real

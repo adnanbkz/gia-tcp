@@ -162,20 +162,28 @@ public class SetupWizard extends JPanel {
 	}
 
 	private JPanel buildIoStep() {
-		JPanel p = new JPanel(new GridBagLayout());
+		JPanel grid = new JPanel(new GridBagLayout());
 		GridBagConstraints c = gbc();
 		c.gridx = 0;
 		c.gridy = 0;
-		p.add(new JLabel(t.t("WIZ_INPUT_X")), c);
+		grid.add(new JLabel(t.t("WIZ_INPUT_X")), c);
 		c.gridx = 1;
 		ioXCombo.setPreferredSize(new Dimension(220, 30));
-		p.add(ioXCombo, c);
+		grid.add(ioXCombo, c);
 		c.gridx = 0;
 		c.gridy = 1;
-		p.add(new JLabel(t.t("WIZ_INPUT_Y")), c);
+		grid.add(new JLabel(t.t("WIZ_INPUT_Y")), c);
 		c.gridx = 1;
 		ioYCombo.setPreferredSize(new Dimension(220, 30));
-		p.add(ioYCombo, c);
+		grid.add(ioYCombo, c);
+		// Filler column: without a weighted cell GridBagLayout centres the whole grid in
+		// the card, and every card is as big as the tallest one (params), so the two rows
+		// drifted to the middle instead of sitting under the step title.
+		c.gridx = 2;
+		c.gridy = 0;
+		c.weightx = 1;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		grid.add(Box.createHorizontalGlue(), c);
 		ioXCombo.addActionListener(e -> {
 			int i = ioXCombo.getSelectedIndex();
 			if (!updating && tcp != null && ioOptions != null && i >= 0) {
@@ -188,6 +196,9 @@ public class SetupWizard extends JPanel {
 				tcp.ioY = ioOptions.get(i).code;
 			}
 		});
+		// NORTH pins the rows just under the step title, like every other step.
+		JPanel p = new JPanel(new BorderLayout());
+		p.add(grid, BorderLayout.NORTH);
 		return p;
 	}
 
